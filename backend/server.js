@@ -14,13 +14,15 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-
 // Request Logging
 app.use(
     morgan("combined", {
         stream: { write: (message) => logger.info(message.trim()) },
     })
 );
+
+// API Routes
+app.use('/api/auth', require('./routes/authRoutes'));
 
 // Route Not Found Handler
 app.use((req, res, next) => {
