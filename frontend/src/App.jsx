@@ -1,15 +1,12 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useCurrentUser } from './features/auth/hooks/useAuth';
 import Login from './pages/Login';
-import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import { Activity } from 'lucide-react';
 
 export default function App() {
-  const [authPage, setAuthPage] = useState('login'); // 'login' | 'register'
-  
   // React Query: Fetch the logged-in user profile if a token exists
-  const { data: user, isLoading, isError } = useCurrentUser();
+  const { data: user, isLoading } = useCurrentUser();
 
   // If loading user profile, show a sleek loading splash screen
   if (isLoading) {
@@ -29,10 +26,6 @@ export default function App() {
     return <Dashboard user={user} />;
   }
 
-  // Otherwise, route to authentication screens
-  return authPage === 'login' ? (
-    <Login onNavigate={setAuthPage} />
-  ) : (
-    <Register onNavigate={setAuthPage} />
-  );
+  // Otherwise, route to Login screen
+  return <Login />;
 }

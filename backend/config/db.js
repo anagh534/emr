@@ -1,5 +1,30 @@
 const mongoose = require('mongoose');
 const logger = require('../utils/logger');
+const User = require('../models/User');
+
+const seedSuperAdmin = async () => {
+    try {
+        const superAdminExists = await User.findOne({ role: 'Super Admin' });
+        if (!superAdminExists) {
+            logger.info('No Super Admin found. Seeding default Super Admin...');
+            
+            const adminEmail = process.env.DEFAULT_ADMIN_EMAIL || 'admin@emr.com';
+            const adminPassword = process.env.DEFAULT_ADMIN_PASSWORD || 'adminpassword123';
+            const adminName = process.env.DEFAULT_ADMIN_NAME || 'System Super Admin';
+
+            await User.create({
+                name: adminName,
+                email: adminEmail,
+                password: adminPassword,
+                role: 'Super Admin'
+            });
+            
+            logger.info(`Default Super Admin created successfully: ${adminEmail}`);
+        }
+    } catch (err) {
+        logger.error('Error seeding Super Admin: ' + err.message);
+    }
+};
 
 const connectDB = async () => {
     try {
@@ -19,6 +44,7 @@ const connectDB = async () => {
 
 mongoose.connection.on('connected', () => {
     logger.info('MongoDB connected');
+    seedSuperAdmin();
 });
 
 mongoose.connection.on('disconnected', () => {

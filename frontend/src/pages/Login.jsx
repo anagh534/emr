@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useLogin } from '../features/auth/hooks/useAuth';
 import { Mail, Lock, Activity, Loader2 } from 'lucide-react';
 
-export default function Login({ onNavigate }) {
+export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [formError, setFormError] = useState('');
@@ -108,23 +108,6 @@ export default function Login({ onNavigate }) {
           </button>
         </form>
 
-        <div style={{ textAlign: 'center', marginTop: '1.5rem', fontSize: '0.875rem' }}>
-          <span style={{ color: 'var(--text-secondary)' }}>Don't have an account? </span>
-          <button
-            onClick={() => onNavigate('register')}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: 'var(--primary)',
-              cursor: 'pointer',
-              fontWeight: 600,
-              padding: 0,
-              fontFamily: 'inherit'
-            }}
-          >
-            Create Account
-          </button>
-        </div>
       </div>
     </div>
   );

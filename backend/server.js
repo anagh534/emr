@@ -3,12 +3,14 @@ const logger = require('./utils/logger');
 const morgan = require('morgan');
 const errorMiddleware = require('./middleware/errorMiddleware');
 const connectDB = require("./config/db");
+const cors = require('cors');
+const PORT = process.env.PORT || 3000;
 
 // Connect to MongoDB
 connectDB();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+app.use(cors());
 
 // Body Parsing Middleware
 app.use(express.json());
