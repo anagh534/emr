@@ -40,6 +40,61 @@ export default function Dashboard({ user }) {
 
   const [activeTab, setActiveTab] = useState(getInitialTab);
 
+  const getPageTitle = () => {
+    switch (activeTab) {
+      case 'overview':
+        return 'System Overview Dashboard';
+      case 'staff':
+        return 'Clinical Staff Registry';
+      case 'schedules':
+        return 'Doctor Schedules Configurator';
+      case 'appointments':
+        return 'Clinical Appointments Registry';
+      case 'patients':
+        return 'Patients Search Registry';
+      case 'appointments_mgmt':
+        return 'Appointment Scheduler & Bookings';
+      case 'my_appointments':
+        return 'My Scheduled Queue';
+      case 'consultations':
+        return 'Diagnosis & Consultations';
+      case 'profile':
+        return 'My Profile Settings';
+      default:
+        return 'Clinical Operations Panel';
+    }
+  };
+
+  const getPageSubtitle = () => {
+    switch (activeTab) {
+      case 'overview':
+        return 'Monitor real-time clinical statistics, queue status, and system metrics.';
+      case 'staff':
+        return 'Manage, audit, and configure user accounts for clinic staff.';
+      case 'schedules':
+        return 'Configure working days, session timings, slot durations, and break timings for doctors.';
+      case 'appointments':
+        return 'Audit, cancel, and update scheduled appointment states across all departments.';
+      case 'patients':
+        return 'Search patient records, contact info, and medical histories.';
+      case 'appointments_mgmt':
+        return 'Schedule appointments, register arrivals, and check slot availability.';
+      case 'my_appointments':
+        return 'Inspect patients waiting in your queue and review clinical notes.';
+      case 'consultations':
+        return 'Record symptom diagnoses, prescriptions, and consult logs.';
+      case 'profile':
+        return 'View account details and change your password.';
+      default:
+        return 'EMR Clinical Management System';
+    }
+  };
+
+  const getTodayDateString = () => {
+    const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+    return new Date().toLocaleDateString('en-US', options);
+  };
+
   // Queries for dynamic stats metrics in overview dashboard tabs
   const { data: usersResponse } = useUsersQuery({ limit: 1 });
   const { data: appointmentsResponse } = useAppointmentsQuery({ limit: 100 });
@@ -282,25 +337,40 @@ export default function Dashboard({ user }) {
 
       {/* Main Panel Content Area */}
       <main className="main-content">
-        <header className="header-dashboard">
+        <header className="header-dashboard" style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '2rem',
+          borderBottom: '1px solid rgba(255,255,255,0.05)',
+          paddingBottom: '1.25rem'
+        }}>
           <div>
-            <h1 className="welcome-title">Clinical Operations Panel</h1>
-            <p className="welcome-subtitle" style={{ fontSize: '0.85rem' }}>
-              Logged in as: <strong style={{ color: 'var(--primary)' }}>{user.name}</strong> • Role: <strong style={{ color: 'var(--secondary)' }}>{user.role}</strong>
+            <h1 className="welcome-title" style={{ fontSize: '1.5rem', fontWeight: '700', letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>
+              {getPageTitle()}
+            </h1>
+            <p className="welcome-subtitle" style={{ fontSize: '0.825rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+              {getPageSubtitle()}
             </p>
           </div>
 
-          {user && (
-            <div className="user-profile-badge">
-              <div className="avatar">
-                {user.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
-              </div>
-              <div className="user-info">
-                <span className="user-name" title={user.name}>{user.name}</span>
-                <span className="user-role">{user.role}</span>
-              </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <div style={{ 
+              padding: '0.5rem 0.85rem', 
+              background: 'rgba(255, 255, 255, 0.02)', 
+              border: '1px solid rgba(255, 255, 255, 0.05)', 
+              borderRadius: 'var(--radius-md)', 
+              fontSize: '0.8rem', 
+              color: 'var(--text-secondary)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              fontWeight: 500
+            }}>
+              <Calendar size={14} style={{ color: 'var(--primary)' }} />
+              {getTodayDateString()}
             </div>
-          )}
+          </div>
         </header>
 
         {/* Active Tab Router */}
