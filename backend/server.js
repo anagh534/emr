@@ -6,6 +6,8 @@ const connectDB = require("./config/db");
 const cors = require('cors');
 const http = require('http');
 const { Server } = require('socket.io');
+const helmet = require('helmet');
+const compression = require('compression');
 
 const PORT = process.env.PORT || 3000;
 
@@ -13,6 +15,8 @@ const PORT = process.env.PORT || 3000;
 connectDB();
 
 const app = express();
+app.use(helmet());
+app.use(compression());
 app.use(cors());
 
 // Initialize HTTP server and socket.io
