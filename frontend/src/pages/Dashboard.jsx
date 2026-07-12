@@ -303,15 +303,6 @@ export default function Dashboard({ user }) {
           )}
         </header>
 
-        {/* Security Clearance Alert */}
-        <div style={{ marginBottom: '1.5rem', padding: '0.75rem 1rem', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-sm)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-            <Activity size={16} style={{ color: 'var(--primary)' }} />
-            <span>Active Session Security Clearance: <span className="badge badge-success" style={{ marginLeft: '0.25rem' }}>{user.role}</span></span>
-          </div>
-          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>HIPAA Audit Enabled</span>
-        </div>
-
         {/* Active Tab Router */}
         {activeTab === 'profile' ? (
           <ProfileSettings user={user} />
