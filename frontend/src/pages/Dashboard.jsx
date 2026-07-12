@@ -110,6 +110,27 @@ export default function Dashboard({ user }) {
   // Render sub-sections based on active tab and security level
   const renderSuperAdminTab = () => {
     if (activeTab === 'overview') {
+      const activeApptsCount = allAppts.filter(a => a.status === 'Scheduled' || a.status === 'Arrived').length;
+      
+      const deptCounts = allAppts.reduce((acc, appt) => {
+        const dept = appt.department || 'General Medicine';
+        acc[dept] = (acc[dept] || 0) + 1;
+        return acc;
+      }, {});
+
+      const statusCounts = allAppts.reduce((acc, appt) => {
+        const status = appt.status || 'Scheduled';
+        acc[status] = (acc[status] || 0) + 1;
+        return acc;
+      }, {});
+
+      const departmentsList = [
+        { name: 'General Medicine', color: '#3b82f6' },
+        { name: 'Diagnostic Medicine', color: '#10b981' },
+        { name: 'Cardiology', color: '#ec4899' },
+        { name: 'Immunology', color: '#f59e0b' }
+      ];
+
       return (
         <>
           <div className="dashboard-grid">
@@ -133,48 +154,81 @@ export default function Dashboard({ user }) {
             </div>
             <div className="glass-card stats-card">
               <div className="stats-info">
-                <h3>Server Load</h3>
-                <div className="value">3.8%</div>
+                <h3>Active Bookings</h3>
+                <div className="value">{activeApptsCount}</div>
               </div>
               <div className="stats-icon" style={{ color: 'var(--success)' }}>
-                <Server size={24} />
+                <CheckCircle2 size={24} />
               </div>
             </div>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '1.5rem', marginTop: '2rem' }}>
+            {/* Department Workload Distribution Chart */}
             <div className="glass-card">
-              <h3 style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <ShieldCheck size={20} style={{ color: 'var(--primary)' }} />
-                Administrative Access: All Dashboards
+              <h3 style={{ marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontFamily: 'var(--font-title)', fontSize: '1.1rem' }}>
+                <Database size={18} style={{ color: 'var(--primary)' }} />
+                Department Workload Distribution
               </h3>
-              <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1.25rem' }}>
-                As a Super Admin, you have unified authorization. You can bypass authorization scopes to view clinical queues, modify active registers, and monitor real-time databases.
-              </p>
-              <div style={{ display: 'flex', gap: '1rem' }}>
-                <button onClick={() => setActiveTab('staff')} className="btn btn-primary">Manage Staff</button>
-                <button onClick={() => setActiveTab('appointments')} className="btn btn-secondary">Review Appointments</button>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.15rem' }}>
+                {departmentsList.map(d => {
+                  const count = deptCounts[d.name] || 0;
+                  const pct = allAppts.length ? Math.round((count / allAppts.length) * 100) : 0;
+                  return (
+                    <div key={d.name} style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                        <span style={{ fontWeight: 500 }}>{d.name}</span>
+                        <span style={{ fontWeight: 600, color: d.color }}>{count} bookings ({pct}%)</span>
+                      </div>
+                      <div style={{ height: '6px', background: 'rgba(255,255,255,0.05)', borderRadius: '3px', overflow: 'hidden' }}>
+                        <div style={{ 
+                          width: `${pct || 4}%`, 
+                          height: '100%', 
+                          background: d.color, 
+                          boxShadow: `0 0 8px ${d.color}aa`, 
+                          borderRadius: '3px', 
+                          transition: 'width 0.5s ease-out' 
+                        }}></div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
+            {/* Appointment Status Analysis Widget */}
             <div className="glass-card">
-              <h3 style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <Database size={20} style={{ color: 'var(--primary)' }} />
-                Database Monitor
+              <h3 style={{ marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontFamily: 'var(--font-title)', fontSize: '1.1rem' }}>
+                <ShieldCheck size={18} style={{ color: 'var(--primary)' }} />
+                Appointment Status Metrics
               </h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.85rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem', borderBottom: '1px solid var(--border-light)' }}>
-                  <span style={{ color: 'var(--text-secondary)' }}>Mongoose Models</span>
-                  <span>User, Patient, Appointment</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem', borderBottom: '1px solid var(--border-light)' }}>
-                  <span style={{ color: 'var(--text-secondary)' }}>Super Admin Seeder</span>
-                  <span style={{ color: 'var(--success)' }}>Active (Seed on startup)</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem' }}>
-                  <span style={{ color: 'var(--text-secondary)' }}>API Request Latency</span>
-                  <span>34ms (Standard)</span>
-                </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                {[
+                  { label: 'Scheduled', count: statusCounts['Scheduled'] || 0, color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.05)', border: 'rgba(59, 130, 246, 0.12)' },
+                  { label: 'Arrived', count: statusCounts['Arrived'] || 0, color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.05)', border: 'rgba(245, 158, 11, 0.12)' },
+                  { label: 'Completed', count: statusCounts['Completed'] || 0, color: '#10b981', bg: 'rgba(16, 185, 129, 0.05)', border: 'rgba(16, 185, 129, 0.12)' },
+                  { label: 'Cancelled', count: statusCounts['Cancelled'] || 0, color: '#ef4848', bg: 'rgba(239, 68, 68, 0.05)', border: 'rgba(239, 68, 68, 0.12)' }
+                ].map(s => {
+                  const pct = allAppts.length ? Math.round((s.count / allAppts.length) * 100) : 0;
+                  return (
+                    <div 
+                      key={s.label} 
+                      style={{ 
+                        padding: '0.85rem 1rem', 
+                        background: s.bg, 
+                        border: `1px solid ${s.border}`, 
+                        borderRadius: 'var(--radius-md)', 
+                        display: 'flex', 
+                        flexDirection: 'column',
+                        gap: '0.2rem' 
+                      }}
+                    >
+                      <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>{s.label}</span>
+                      <div style={{ fontSize: '1.35rem', fontWeight: 700, color: s.color }}>{s.count}</div>
+                      <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)' }}>{pct}% of all bookings</span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>
