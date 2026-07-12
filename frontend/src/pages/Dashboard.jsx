@@ -34,8 +34,8 @@ export default function Dashboard({ user }) {
 
   // Database mock state (represents backend entities for RBAC actions)
   const [doctors, setDoctors] = useState([
-    { id: 1, name: 'Dr. Gregory House', email: 'house@emr.com', specialty: 'Diagnostic Medicine', schedule: 'Mon - Wed, 09:00 AM - 05:00 PM' },
-    { id: 2, name: 'Dr. Allison Cameron', email: 'cameron@emr.com', specialty: 'Immunology', schedule: 'Thu - Fri, 08:00 AM - 04:00 PM' },
+    { id: 1, name: 'Dr. Gregory House', email: 'house@emr.com', department: 'Diagnostic Medicine', schedule: 'Mon - Wed, 09:00 AM - 05:00 PM' },
+    { id: 2, name: 'Dr. Allison Cameron', email: 'cameron@emr.com', department: 'Immunology', schedule: 'Thu - Fri, 08:00 AM - 04:00 PM' },
   ]);
 
   const [receptionists, setReceptionists] = useState([
@@ -60,7 +60,7 @@ export default function Dashboard({ user }) {
   const [staffEmail, setStaffEmail] = useState('');
   const [staffPassword, setStaffPassword] = useState('');
   const [staffRole, setStaffRole] = useState('Doctor');
-  const [staffSpecialty, setStaffSpecialty] = useState('Diagnostic Medicine');
+  const [staffDepartment, setStaffDepartment] = useState('Diagnostic Medicine');
   const [staffMessage, setStaffMessage] = useState({ text: '', type: '' });
 
   // Super Admin: Edit Doctor Schedules
@@ -104,7 +104,7 @@ export default function Dashboard({ user }) {
           if (staffRole === 'Doctor') {
             setDoctors([
               ...doctors,
-              { id: doctors.length + 5, name: staffName, email: staffEmail, specialty: staffSpecialty, schedule: 'Not Assigned' }
+              { id: doctors.length + 5, name: staffName, email: staffEmail, department: staffDepartment, schedule: 'Not Assigned' }
             ]);
           } else {
             setReceptionists([
@@ -282,8 +282,8 @@ export default function Dashboard({ user }) {
 
               {staffRole === 'Doctor' && (
                 <div className="form-group">
-                  <label>Clinical Specialty</label>
-                  <select className="form-input" style={{ paddingLeft: '1rem' }} value={staffSpecialty} onChange={(e) => setStaffSpecialty(e.target.value)}>
+                  <label>Department</label>
+                  <select className="form-input" style={{ paddingLeft: '1rem' }} value={staffDepartment} onChange={(e) => setStaffDepartment(e.target.value)}>
                     <option value="Diagnostic Medicine">Diagnostic Medicine</option>
                     <option value="Immunology">Immunology</option>
                     <option value="Cardiology">Cardiology</option>
@@ -328,7 +328,7 @@ export default function Dashboard({ user }) {
                     <h4 style={{ fontWeight: 600, fontSize: '0.9rem' }}>{doc.name}</h4>
                     <p style={{ color: 'var(--text-secondary)', fontSize: '0.75rem' }}>{doc.email}</p>
                   </div>
-                  <span className="badge badge-success" style={{ alignSelf: 'center' }}>{doc.specialty}</span>
+                  <span className="badge badge-success" style={{ alignSelf: 'center' }}>{doc.department}</span>
                 </div>
               ))}
 
@@ -366,7 +366,7 @@ export default function Dashboard({ user }) {
                   if (doc) setNewScheduleText(doc.schedule);
                 }}>
                   {doctors.map(doc => (
-                    <option key={doc.id} value={doc.id}>{doc.name} ({doc.specialty})</option>
+                    <option key={doc.id} value={doc.id}>{doc.name} ({doc.department})</option>
                   ))}
                 </select>
               </div>
@@ -392,7 +392,7 @@ export default function Dashboard({ user }) {
               {doctors.map(doc => (
                 <div key={doc.id} style={{ padding: '1rem', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-md)' }}>
                   <h4 style={{ fontWeight: 600, color: 'var(--primary)' }}>{doc.name}</h4>
-                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginTop: '0.2rem' }}>Specialty: {doc.specialty}</p>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginTop: '0.2rem' }}>Department: {doc.department}</p>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.5rem', fontSize: '0.85rem' }}>
                     <Clock size={14} style={{ color: 'var(--warning)' }} />
                     <span>{doc.schedule}</span>
@@ -605,7 +605,7 @@ export default function Dashboard({ user }) {
                 <label>Consulting Doctor</label>
                 <select className="form-input" style={{ paddingLeft: '1rem' }} value={bookDocId} onChange={(e) => setBookDocId(e.target.value)}>
                   {doctors.map(d => (
-                    <option key={d.id} value={d.id}>{d.name} ({d.specialty})</option>
+                    <option key={d.id} value={d.id}>{d.name} ({d.department})</option>
                   ))}
                 </select>
               </div>
