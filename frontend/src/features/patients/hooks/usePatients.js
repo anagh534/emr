@@ -4,11 +4,10 @@ import { patientApi } from '../services/patientApi';
 /**
  * Hook to execute patient queries on Name, ID, or Contact.
  */
-export function useSearchPatientsQuery(query, options = {}) {
+export function useSearchPatientsQuery(query = '', limit = 5, offset = 0, options = {}) {
   return useQuery({
-    queryKey: ['patients', 'search', query],
-    queryFn: () => patientApi.searchPatients(query),
-    enabled: !!query && query.trim().length > 0,
+    queryKey: ['patients', 'search', query, limit, offset],
+    queryFn: () => patientApi.searchPatients(query, limit, offset),
     ...options
   });
 }

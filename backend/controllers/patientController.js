@@ -1,29 +1,62 @@
 const Patient = require('../models/Patient');
+const Appointment = require('../models/Appointment');
 const logger = require('../utils/logger');
 
 /**
- * Search patients by Name, Patient ID, or Mobile number
+ * Search patients by Name, Patient ID, or Mobile number and attach booking history details
  * GET /api/patients?query=...
  */
 const searchPatients = async (req, res, next) => {
     try {
+        const limit = parseInt(req.query.limit || '5', 10);
+        const offset = parseInt(req.query.offset || '0', 10);
         const { query } = req.query;
-        if (!query) {
-            return res.status(200).json({ success: true, data: [] });
-        }
+        const filter = {};
 
-        const filter = {
-            $or: [
+        if (query && query.trim() !== '') {
+            filter.$or = [
                 { name: { $regex: query, $options: 'i' } },
                 { patientId: { $regex: query, $options: 'i' } },
                 { mobileNumber: { $regex: query, $options: 'i' } }
-            ]
-        };
+            ];
+        }
 
-        const patients = await Patient.find(filter).limit(10);
+        const totalCount = await Patient.countDocuments(filter);
+        const patients = await Patient.find(filter)
+            .sort({ createdAt: -1 })
+            .skip(offset)
+            .limit(limit);
+        
+        // Fetch scheduled appointments for these patients to return booking details
+        const patientIds = patients.map(p => p._id);
+        const appointments = await Appointment.find({ patient: { $in: patientIds } })
+            .populate('doctor', 'name')
+            .sort({ date: -1, timeSlot: -1 });
+
+        // Map appointments as bookings list per patient profile
+        const patientsWithBookings = patients.map(p => {
+            const bookings = appointments.filter(a => a.patient.toString() === p._id.toString());
+            return {
+                ...p.toObject(),
+                bookings: bookings.map(b => ({
+                    _id: b._id,
+                    doctorName: b.doctor?.name || 'Unknown Doctor',
+                    date: b.date,
+                    timeSlot: b.timeSlot,
+                    status: b.status,
+                    purpose: b.purpose
+                }))
+            };
+        });
+
         res.status(200).json({
             success: true,
-            data: patients
+            data: {
+                patients: patientsWithBookings,
+                totalCount,
+                limit,
+                offset
+            }
         });
     } catch (err) {
         next(err);
