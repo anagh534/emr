@@ -42,9 +42,26 @@ const connectDB = async () => {
     }
 };
 
+const syncDatabaseIndexes = async () => {
+    try {
+        const Appointment = require('../models/Appointment');
+        const User = require('../models/User');
+        const Patient = require('../models/Patient');
+        
+        logger.info('Syncing database indexes...');
+        await Appointment.syncIndexes();
+        await User.syncIndexes();
+        await Patient.syncIndexes();
+        logger.info('Database indexes synced successfully.');
+    } catch (err) {
+        logger.error('Error syncing database indexes: ' + err.message);
+    }
+};
+
 mongoose.connection.on('connected', () => {
     logger.info('MongoDB connected');
     seedSuperAdmin();
+    syncDatabaseIndexes();
 });
 
 mongoose.connection.on('disconnected', () => {

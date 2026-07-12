@@ -45,7 +45,13 @@ const appointmentSchema = new mongoose.Schema({
     timestamps: true
 });
 
-// Compound unique index to guarantee no double booking for same doctor at same date and time slot
-appointmentSchema.index({ doctor: 1, date: 1, timeSlot: 1 }, { unique: true });
+// Compound unique index to guarantee no double booking for same doctor at same date and time slot (excluding Cancelled ones)
+appointmentSchema.index(
+    { doctor: 1, date: 1, timeSlot: 1 }, 
+    { 
+        unique: true,
+        partialFilterExpression: { status: { $ne: 'Cancelled' } }
+    }
+);
 
 module.exports = mongoose.model('Appointment', appointmentSchema);
