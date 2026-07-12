@@ -264,6 +264,11 @@ const createAppointment = async (req, res, next) => {
             .populate('patient')
             .populate('doctor', 'name email department');
 
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('appointment:created', populated);
+        }
+
         res.status(201).json({
             success: true,
             data: populated
@@ -343,6 +348,14 @@ const updateAppointment = async (req, res, next) => {
         const populated = await Appointment.findById(appointment._id)
             .populate('patient')
             .populate('doctor', 'name email department');
+
+        const io = req.app.get('io');
+        if (io) {
+            if (populated.status === 'Cancelled') {
+                io.emit('appointment:cancelled', populated);
+            }
+            io.emit('appointment:updated', populated);
+        }
 
         res.status(200).json({
             success: true,

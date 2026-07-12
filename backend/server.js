@@ -4,6 +4,9 @@ const morgan = require('morgan');
 const errorMiddleware = require('./middleware/errorMiddleware');
 const connectDB = require("./config/db");
 const cors = require('cors');
+const http = require('http');
+const { Server } = require('socket.io');
+
 const PORT = process.env.PORT || 3000;
 
 // Connect to MongoDB
@@ -11,6 +14,24 @@ connectDB();
 
 const app = express();
 app.use(cors());
+
+// Initialize HTTP server and socket.io
+const server = http.createServer(app);
+const io = new Server(server, {
+    cors: {
+        origin: '*',
+        methods: ['GET', 'POST', 'PATCH', 'DELETE']
+    }
+});
+
+app.set('io', io);
+
+io.on('connection', (socket) => {
+    logger.info(`Socket client connected: ${socket.id}`);
+    socket.on('disconnect', () => {
+        logger.info(`Socket client disconnected: ${socket.id}`);
+    });
+});
 
 // Body Parsing Middleware
 app.use(express.json());
@@ -41,6 +62,6 @@ app.use((req, res, next) => {
 // Global Error Handler
 app.use(errorMiddleware);
 
-app.listen(PORT, () => {
+server.listen(PORT, () => {
     logger.info(`Server is running on port ${PORT}`);
 });
