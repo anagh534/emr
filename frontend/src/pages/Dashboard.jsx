@@ -11,6 +11,7 @@ import { AppointmentsRegistry } from '../features/appointments/components/Appoin
 import { DoctorAppointmentsQueue } from '../features/appointments/components/DoctorAppointmentsQueue';
 import { DoctorConsultations } from '../features/appointments/components/DoctorConsultations';
 import { ProfileSettings } from '../components/ProfileSettings';
+import { useLogout } from '../features/auth/hooks/useAuth';
 
 import { 
   Activity, 
@@ -100,12 +101,10 @@ export default function Dashboard({ user }) {
   const { data: appointmentsResponse } = useAppointmentsQuery({ limit: 100 });
   const allAppts = appointmentsResponse?.data?.appointments || [];
 
+  const logoutMutation = useLogout();
+
   const handleLogout = () => {
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
-    // Clear React Query cache and fire global event to return to Login page
-    queryClient.clear();
-    window.dispatchEvent(new Event('auth:logout'));
+    logoutMutation.mutate();
   };
 
   // Render sub-sections based on active tab and security level
