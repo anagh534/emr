@@ -264,9 +264,32 @@ const logout = async (req, res, next) => {
     }
 };
 
+/**
+ * Get current logged in user details
+ * GET /api/auth/me
+ */
+const getMe = async (req, res, next) => {
+    try {
+        res.status(200).json({
+            success: true,
+            data: {
+                user: {
+                    id: req.user._id,
+                    name: req.user.name,
+                    email: req.user.email,
+                    role: req.user.role
+                }
+            }
+        });
+    } catch (err) {
+        next(err);
+    }
+};
+
 module.exports = {
     register,
     login,
     refresh,
-    logout
+    logout,
+    getMe
 };
