@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { getUsers, toggleUserStatus, deleteUser, changePassword } = require('../controllers/userController');
 const { protect, restrictTo } = require('../middleware/authMiddleware');
+const { validateChangePassword, validateToggleStatus } = require('../validators/userValidator');
 
 // Lock all user management endpoints to Super Admins only
 router.use(protect);
@@ -11,10 +12,10 @@ router.route('/')
     .get(getUsers);
 
 router.route('/:id/status')
-    .patch(toggleUserStatus);
+    .patch(validateToggleStatus, toggleUserStatus);
 
 router.route('/:id/password')
-    .patch(changePassword);
+    .patch(validateChangePassword, changePassword);
 
 router.route('/:id')
     .delete(deleteUser);
