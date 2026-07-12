@@ -17,14 +17,20 @@ connectDB();
 const app = express();
 app.use(helmet());
 app.use(compression());
-app.use(cors());
+
+const corsOrigin = process.env.CORS_ORIGIN || 'http://localhost:5173';
+app.use(cors({
+    origin: corsOrigin,
+    credentials: true
+}));
 
 // Initialize HTTP server and socket.io
 const server = http.createServer(app);
 const io = new Server(server, {
     cors: {
-        origin: '*',
-        methods: ['GET', 'POST', 'PATCH', 'DELETE']
+        origin: corsOrigin,
+        methods: ['GET', 'POST', 'PATCH', 'DELETE'],
+        credentials: true
     }
 });
 

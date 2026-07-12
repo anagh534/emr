@@ -24,7 +24,7 @@ export function AppProvider({ children }) {
     // Initialize Socket.IO connection
     const socketUrl = import.meta.env.VITE_API_URL 
       ? import.meta.env.VITE_API_URL.replace('/api', '') 
-      : 'http://localhost:3000'; // Default port is 3000
+      : 'http://localhost:5000'; // Default port is 5000
 
     const socket = io(socketUrl);
 
