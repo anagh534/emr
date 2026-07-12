@@ -57,3 +57,17 @@ export function useChangeUserPassword() {
     mutationFn: ({ id, password }) => userApi.changePassword(id, password),
   });
 }
+
+/**
+ * Hook to update a doctor's schedule configuration by Super Admin.
+ */
+export function useUpdateUserSchedule() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, scheduleData }) => userApi.updateSchedule(id, scheduleData),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+    },
+  });
+}

@@ -181,9 +181,55 @@ const changePassword = async (req, res, next) => {
     }
 };
 
+/**
+ * Update doctor schedule config by Admin
+ * PATCH /api/users/:id/schedule
+ */
+const updateSchedule = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const { workingDays, slotDuration, sessions, breaks } = req.body;
+
+        const user = await User.findById(id);
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found'
+            });
+        }
+
+        if (user.role !== 'Doctor') {
+            return res.status(400).json({
+                success: false,
+                message: 'Schedules can only be configured for Doctor accounts'
+            });
+        }
+
+        // Apply new values or fallback to existing values
+        user.schedule = {
+            workingDays: workingDays || user.schedule.workingDays,
+            slotDuration: slotDuration || user.schedule.slotDuration,
+            sessions: sessions || user.schedule.sessions,
+            breaks: breaks || user.schedule.breaks
+        };
+
+        await user.save();
+        logger.info(`Schedule updated for Doctor ${user.email} by Admin ${req.user.email}`);
+
+        res.status(200).json({
+            success: true,
+            message: `Schedule configuration saved successfully for ${user.name}`,
+            data: user.schedule
+        });
+    } catch (err) {
+        next(err);
+    }
+};
+
 module.exports = {
     getUsers,
     toggleUserStatus,
     deleteUser,
-    changePassword
+    changePassword,
+    updateSchedule
 };

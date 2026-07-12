@@ -43,4 +43,14 @@ export const userApi = {
     const response = await api.patch(`/users/${id}/password`, { password });
     return response.data;
   },
+
+  /**
+   * Update doctor schedule config by Admin
+   * @param {string} id - Doctor User ID
+   * @param {Object} scheduleData - { workingDays, slotDuration, sessions, breaks }
+   */
+  updateSchedule: async (id, scheduleData) => {
+    const response = await api.patch(`/users/${id}/schedule`, scheduleData);
+    return response.data;
+  },
 };

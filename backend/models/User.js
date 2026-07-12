@@ -35,6 +35,37 @@ const userSchema = new mongoose.Schema({
     isActive: {
         type: Boolean,
         default: true
+    },
+    schedule: {
+        workingDays: {
+            type: [String],
+            default: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
+        },
+        slotDuration: {
+            type: Number,
+            default: 15 // in minutes
+        },
+        sessions: {
+            type: [{
+                name: String,
+                startTime: String, // HH:MM (24h)
+                endTime: String    // HH:MM (24h)
+            }],
+            default: [
+                { name: 'Morning Session', startTime: '09:00', endTime: '12:00' },
+                { name: 'Evening Session', startTime: '13:00', endTime: '17:00' }
+            ]
+        },
+        breaks: {
+            type: [{
+                name: String,
+                startTime: String, // HH:MM (24h)
+                endTime: String    // HH:MM (24h)
+            }],
+            default: [
+                { name: 'Lunch Break', startTime: '12:00', endTime: '13:00' }
+            ]
+        }
     }
 }, {
     timestamps: true

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useLogout, useCreateStaff } from '../features/auth/hooks/useAuth';
-import { useUsersQuery, useToggleUserStatus, useDeleteUser, useChangeUserPassword } from '../features/users/hooks/useUsers';
+import { useUsersQuery, useToggleUserStatus, useDeleteUser, useChangeUserPassword, useUpdateUserSchedule } from '../features/users/hooks/useUsers';
 import { userApi } from '../features/users/services/userApi';
 import { 
   Activity, 
@@ -154,18 +154,25 @@ export default function Dashboard({ user }) {
   const [staffDepartment, setStaffDepartment] = useState('Diagnostic Medicine');
   const [staffMessage, setStaffMessage] = useState({ text: '', type: '' });
 
-  // Super Admin: Edit Doctor Schedules
-  const [selectedDoctorId, setSelectedDoctorId] = useState(1);
-  const [newScheduleText, setNewScheduleText] = useState('Mon - Wed, 09:00 AM - 05:00 PM');
+  // Super Admin: Edit Doctor Schedules (Rich Schedule Settings)
+  const updateScheduleMutation = useUpdateUserSchedule();
+  const [selectedDocId, setSelectedDocId] = useState('');
+  const [workingDays, setWorkingDays] = useState(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']);
+  const [slotDuration, setSlotDuration] = useState(15);
+  const [sessions, setSessions] = useState([
+    { name: 'Morning Session', startTime: '09:00', endTime: '12:00' },
+    { name: 'Evening Session', startTime: '13:00', endTime: '17:00' }
+  ]);
+  const [breaks, setBreaks] = useState([
+    { name: 'Lunch Break', startTime: '12:00', endTime: '13:00' }
+  ]);
 
-  // Receptionist: Patient Search
-  const [searchQuery, setSearchQuery] = useState('');
+  // Query database doctors dynamically to support calendar setups
+  const { data: dbDoctorsResponse } = useUsersQuery({ limit: 100, role: 'Doctor' });
+  const dbDoctors = dbDoctorsResponse?.data?.users || [];
 
-  // Receptionist: Book Appointment
-  const [bookName, setBookName] = useState('');
-  const [bookAge, setBookAge] = useState('');
-  const [bookReason, setBookReason] = useState('');
-  const [bookDocId, setBookDocId] = useState(1);
+  // Reset bookDocId default to empty string so selection is forced
+  const [bookDocId, setBookDocId] = useState('');
   const [bookTime, setBookTime] = useState('09:00 AM');
 
   // Doctor: Select Patient & Edit Consultation Notes
@@ -364,10 +371,131 @@ export default function Dashboard({ user }) {
     );
   };
 
+  const handleDoctorSelectChange = (docId) => {
+    setSelectedDocId(docId);
+    const doc = dbDoctors.find(d => d._id === docId);
+    if (doc && doc.schedule) {
+      setWorkingDays(doc.schedule.workingDays || []);
+      setSlotDuration(doc.schedule.slotDuration || 15);
+      setSessions(doc.schedule.sessions || []);
+      setBreaks(doc.schedule.breaks || []);
+    } else {
+      // Set default values
+      setWorkingDays(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']);
+      setSlotDuration(15);
+      setSessions([
+        { name: 'Morning Session', startTime: '09:00', endTime: '12:00' },
+        { name: 'Evening Session', startTime: '13:00', endTime: '17:00' }
+      ]);
+      setBreaks([
+        { name: 'Lunch Break', startTime: '12:00', endTime: '13:00' }
+      ]);
+    }
+  };
+
+  const handleWorkingDayToggle = (day) => {
+    setWorkingDays(prev => 
+      prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]
+    );
+  };
+
+  const handleSessionFieldChange = (index, field, value) => {
+    setSessions(prev => prev.map((s, idx) => idx === index ? { ...s, [field]: value } : s));
+  };
+
+  const addSession = () => {
+    setSessions(prev => [...prev, { name: 'New Session', startTime: '09:00', endTime: '17:00' }]);
+  };
+
+  const removeSession = (index) => {
+    setSessions(prev => prev.filter((_, idx) => idx !== index));
+  };
+
+  const handleBreakFieldChange = (index, field, value) => {
+    setBreaks(prev => prev.map((b, idx) => idx === index ? { ...b, [field]: value } : b));
+  };
+
+  const addBreak = () => {
+    setBreaks(prev => [...prev, { name: 'New Break', startTime: '12:00', endTime: '13:00' }]);
+  };
+
+  const removeBreak = (index) => {
+    setBreaks(prev => prev.filter((_, idx) => idx !== index));
+  };
+
   const handleUpdateSchedule = (e) => {
     e.preventDefault();
-    setDoctors(doctors.map(doc => doc.id === parseInt(selectedDoctorId) ? { ...doc, schedule: newScheduleText } : doc));
-    alert('Doctor schedule updated successfully!');
+    if (!selectedDocId) {
+      addToast('Please select a doctor', 'error');
+      return;
+    }
+
+    updateScheduleMutation.mutate({
+      id: selectedDocId,
+      scheduleData: { workingDays, slotDuration, sessions, breaks }
+    }, {
+      onSuccess: () => {
+        addToast('Doctor schedule updated successfully!', 'success');
+      },
+      onError: (err) => {
+        addToast(err.response?.data?.message || 'Failed to update schedule', 'error');
+      }
+    });
+  };
+
+  // Helper to generate dynamic slot options while omitting breaks
+  const generateSlotsForDoctor = (doctor) => {
+    if (!doctor || !doctor.schedule) {
+      return ['09:00 AM', '09:30 AM', '10:00 AM', '10:30 AM', '11:00 AM', '11:30 AM', '01:30 PM', '02:00 PM', '02:30 PM', '03:00 PM', '03:30 PM', '04:00 PM', '04:30 PM'];
+    }
+
+    const { sessions, breaks, slotDuration } = doctor.schedule;
+    const slots = [];
+
+    const toMinutes = (timeStr) => {
+      if (!timeStr) return 0;
+      const [h, m] = timeStr.split(':').map(Number);
+      return h * 60 + m;
+    };
+
+    const formatTime = (totalMin) => {
+      let hrs = Math.floor(totalMin / 60);
+      const mins = totalMin % 60;
+      const ampm = hrs >= 12 ? 'PM' : 'AM';
+      hrs = hrs % 12;
+      hrs = hrs ? hrs : 12;
+      const formattedHrs = hrs < 10 ? `0${hrs}` : hrs;
+      const formattedMins = mins < 10 ? `0${mins}` : mins;
+      return `${formattedHrs}:${formattedMins} ${ampm}`;
+    };
+
+    const parsedBreaks = (breaks || []).map(b => ({
+      start: toMinutes(b.startTime),
+      end: toMinutes(b.endTime)
+    }));
+
+    (sessions || []).forEach(sess => {
+      const sessionStart = toMinutes(sess.startTime);
+      const sessionEnd = toMinutes(sess.endTime);
+
+      for (let time = sessionStart; time + slotDuration <= sessionEnd; time += slotDuration) {
+        // Slot overlaps break if slot start is inside [brk.start, brk.end)
+        // or if slot end is inside (brk.start, brk.end] or contains it
+        const slotStart = time;
+        const slotEnd = time + slotDuration;
+        const inBreak = parsedBreaks.some(brk => {
+          return (slotStart >= brk.start && slotStart < brk.end) || 
+                 (slotEnd > brk.start && slotEnd <= brk.end) ||
+                 (slotStart <= brk.start && slotEnd >= brk.end);
+        });
+
+        if (!inBreak) {
+          slots.push(formatTime(time));
+        }
+      }
+    });
+
+    return slots.length > 0 ? slots : ['No slots available'];
   };
 
   const handleBookAppointment = (e) => {
@@ -427,7 +555,7 @@ export default function Dashboard({ user }) {
             <div className="glass-card stats-card">
               <div className="stats-info">
                 <h3>Total Staff</h3>
-                <div className="value">{doctors.length + receptionists.length}</div>
+                <div className="value">{usersResponse?.data?.totalCount || 0}</div>
               </div>
               <div className="stats-icon">
                 <Users size={24} />
@@ -877,30 +1005,171 @@ export default function Dashboard({ user }) {
           <div className="glass-card">
             <h2 style={{ fontSize: '1.25rem', marginBottom: '1.25rem', fontFamily: 'var(--font-title)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <Edit size={20} style={{ color: 'var(--primary)' }} />
-              Manage Doctor Schedules
+              Configure Doctor Schedule
             </h2>
             <form onSubmit={handleUpdateSchedule}>
               <div className="form-group">
                 <label>Select Clinical Doctor</label>
-                <select className="form-input" style={{ paddingLeft: '1rem' }} value={selectedDoctorId} onChange={(e) => {
-                  setSelectedDoctorId(e.target.value);
-                  const doc = doctors.find(d => d.id === parseInt(e.target.value));
-                  if (doc) setNewScheduleText(doc.schedule);
-                }}>
-                  {doctors.map(doc => (
-                    <option key={doc.id} value={doc.id}>{doc.name} ({doc.department})</option>
+                <select className="form-input" style={{ paddingLeft: '1rem' }} value={selectedDocId} onChange={(e) => handleDoctorSelectChange(e.target.value)} required>
+                  <option value="">-- Choose Doctor --</option>
+                  {dbDoctors.map(doc => (
+                    <option key={doc._id} value={doc._id}>{doc.name}</option>
                   ))}
                 </select>
               </div>
 
-              <div className="form-group">
-                <label>Schedule Shift / Hours</label>
-                <input type="text" className="form-input" style={{ paddingLeft: '1rem' }} value={newScheduleText} onChange={(e) => setNewScheduleText(e.target.value)} required />
-              </div>
+              {selectedDocId && (
+                <>
+                  {/* Working Days */}
+                  <div className="form-group">
+                    <label>Working Days</label>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: '0.5rem', marginTop: '0.5rem' }}>
+                      {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => (
+                        <label key={day} style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.8rem', cursor: 'pointer', color: 'var(--text-secondary)' }}>
+                          <input 
+                            type="checkbox" 
+                            checked={workingDays.includes(day)} 
+                            onChange={() => handleWorkingDayToggle(day)} 
+                          />
+                          {day}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
 
-              <button type="submit" className="btn btn-primary btn-block" style={{ marginTop: '1rem' }}>
-                Update Schedule Shift
-              </button>
+                  {/* Slot Duration */}
+                  <div className="form-group">
+                    <label>Slot Duration (Minutes)</label>
+                    <input 
+                      type="number" 
+                      className="form-input" 
+                      style={{ paddingLeft: '1rem' }} 
+                      value={slotDuration} 
+                      onChange={(e) => setSlotDuration(parseInt(e.target.value) || 15)} 
+                      min="5" 
+                      max="120"
+                      required
+                    />
+                  </div>
+
+                  {/* Sessions */}
+                  <div className="form-group">
+                    <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span>Working Sessions</span>
+                      <button 
+                        type="button" 
+                        onClick={addSession} 
+                        className="btn btn-secondary" 
+                        style={{ padding: '0.15rem 0.4rem', fontSize: '0.7rem', border: 'none' }}
+                      >
+                        + Add Session
+                      </button>
+                    </label>
+                    <div style={{ marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                      {sessions.map((sess, idx) => (
+                        <div key={idx} style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
+                          <input 
+                            type="text" 
+                            className="form-input" 
+                            style={{ flex: 1.2, paddingLeft: '0.5rem', fontSize: '0.8rem', height: '32px' }} 
+                            placeholder="Session Name (e.g. Morning)" 
+                            value={sess.name} 
+                            onChange={(e) => handleSessionFieldChange(idx, 'name', e.target.value)}
+                            required
+                          />
+                          <input 
+                            type="time" 
+                            className="form-input" 
+                            style={{ flex: 0.9, paddingLeft: '0.5rem', fontSize: '0.8rem', height: '32px' }} 
+                            value={sess.startTime} 
+                            onChange={(e) => handleSessionFieldChange(idx, 'startTime', e.target.value)}
+                            required
+                          />
+                          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>to</span>
+                          <input 
+                            type="time" 
+                            className="form-input" 
+                            style={{ flex: 0.9, paddingLeft: '0.5rem', fontSize: '0.8rem', height: '32px' }} 
+                            value={sess.endTime} 
+                            onChange={(e) => handleSessionFieldChange(idx, 'endTime', e.target.value)}
+                            required
+                          />
+                          <button 
+                            type="button" 
+                            onClick={() => removeSession(idx)} 
+                            style={{ border: 'none', background: 'transparent', color: 'var(--error)', cursor: 'pointer', fontSize: '1.25rem', padding: '0.25rem' }}
+                          >
+                            &times;
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Breaks */}
+                  <div className="form-group">
+                    <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span>Break Timings</span>
+                      <button 
+                        type="button" 
+                        onClick={addBreak} 
+                        className="btn btn-secondary" 
+                        style={{ padding: '0.15rem 0.4rem', fontSize: '0.7rem', border: 'none' }}
+                      >
+                        + Add Break
+                      </button>
+                    </label>
+                    <div style={{ marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                      {breaks.map((brk, idx) => (
+                        <div key={idx} style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
+                          <input 
+                            type="text" 
+                            className="form-input" 
+                            style={{ flex: 1.2, paddingLeft: '0.5rem', fontSize: '0.8rem', height: '32px' }} 
+                            placeholder="Break Name (e.g. Lunch)" 
+                            value={brk.name} 
+                            onChange={(e) => handleBreakFieldChange(idx, 'name', e.target.value)}
+                            required
+                          />
+                          <input 
+                            type="time" 
+                            className="form-input" 
+                            style={{ flex: 0.9, paddingLeft: '0.5rem', fontSize: '0.8rem', height: '32px' }} 
+                            value={brk.startTime} 
+                            onChange={(e) => handleBreakFieldChange(idx, 'startTime', e.target.value)}
+                            required
+                          />
+                          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>to</span>
+                          <input 
+                            type="time" 
+                            className="form-input" 
+                            style={{ flex: 0.9, paddingLeft: '0.5rem', fontSize: '0.8rem', height: '32px' }} 
+                            value={brk.endTime} 
+                            onChange={(e) => handleBreakFieldChange(idx, 'endTime', e.target.value)}
+                            required
+                          />
+                          <button 
+                            type="button" 
+                            onClick={() => removeBreak(idx)} 
+                            style={{ border: 'none', background: 'transparent', color: 'var(--error)', cursor: 'pointer', fontSize: '1.25rem', padding: '0.25rem' }}
+                          >
+                            &times;
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <button 
+                    type="submit" 
+                    className="btn btn-primary btn-block" 
+                    disabled={updateScheduleMutation.isPending} 
+                    style={{ marginTop: '1.5rem' }}
+                  >
+                    {updateScheduleMutation.isPending ? 'Saving Schedule...' : 'Save Schedule Settings'}
+                  </button>
+                </>
+              )}
             </form>
           </div>
 
@@ -908,19 +1177,51 @@ export default function Dashboard({ user }) {
           <div className="glass-card">
             <h2 style={{ fontSize: '1.25rem', marginBottom: '1.25rem', fontFamily: 'var(--font-title)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <CalendarDays size={20} style={{ color: 'var(--primary)' }} />
-              Shift Rotations
+              Active Doctor Shifts
             </h2>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {doctors.map(doc => (
-                <div key={doc.id} style={{ padding: '1rem', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-md)' }}>
+              {dbDoctors.map(doc => (
+                <div key={doc._id} style={{ padding: '1rem', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-md)' }}>
                   <h4 style={{ fontWeight: 600, color: 'var(--primary)' }}>{doc.name}</h4>
-                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginTop: '0.2rem' }}>Department: {doc.department}</p>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.5rem', fontSize: '0.85rem' }}>
-                    <Clock size={14} style={{ color: 'var(--warning)' }} />
-                    <span>{doc.schedule}</span>
-                  </div>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginTop: '0.2rem' }}>Email: {doc.email}</p>
+                  
+                  {doc.schedule ? (
+                    <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                      <div>
+                        <strong>Working Days:</strong> {doc.schedule.workingDays?.join(', ') || 'None'}
+                      </div>
+                      <div>
+                        <strong>Slot Duration:</strong> {doc.schedule.slotDuration} minutes
+                      </div>
+                      {doc.schedule.sessions?.length > 0 && (
+                        <div>
+                          <strong>Sessions:</strong>
+                          <ul style={{ margin: '0.25rem 0 0 1rem', paddingLeft: 0, listStyle: 'circle' }}>
+                            {doc.schedule.sessions.map((s, i) => (
+                              <li key={i}>{s.name}: {s.startTime} - {s.endTime}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {doc.schedule.breaks?.length > 0 && (
+                        <div>
+                          <strong>Breaks:</strong>
+                          <ul style={{ margin: '0.25rem 0 0 1rem', paddingLeft: 0, listStyle: 'circle', color: 'var(--warning)' }}>
+                            {doc.schedule.breaks.map((b, i) => (
+                              <li key={i}>{b.name}: {b.startTime} - {b.endTime}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.5rem' }}>No schedule configured</p>
+                  )}
                 </div>
               ))}
+              {dbDoctors.length === 0 && (
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textAlign: 'center' }}>No clinical doctors registered.</p>
+              )}
             </div>
           </div>
         </div>
@@ -948,8 +1249,8 @@ export default function Dashboard({ user }) {
                 </tr>
               </thead>
               <tbody>
-                {appointments.map(appt => {
-                  const doc = doctors.find(d => d.id === appt.doctorId);
+                 {appointments.map(appt => {
+                  const doc = dbDoctors.find(d => d._id === appt.doctorId) || doctors.find(d => d.id === appt.doctorId);
                   return (
                     <tr key={appt.id} style={{ borderBottom: '1px solid var(--border-light)' }}>
                       <td style={{ padding: '0.75rem', fontWeight: 600 }}>{appt.patientName} (Age {appt.age})</td>
@@ -1111,23 +1412,29 @@ export default function Dashboard({ user }) {
                   <label>Age</label>
                   <input type="number" className="form-input" style={{ paddingLeft: '1rem' }} placeholder="34" value={bookAge} onChange={(e) => setBookAge(e.target.value)} required />
                 </div>
-                <div className="form-group">
+                 <div className="form-group">
                   <label>Time Slot</label>
-                  <select className="form-input" style={{ paddingLeft: '1rem' }} value={bookTime} onChange={(e) => setBookTime(e.target.value)}>
-                    <option value="09:00 AM">09:00 AM</option>
-                    <option value="10:30 AM">10:30 AM</option>
-                    <option value="11:30 AM">11:30 AM</option>
-                    <option value="01:30 PM">01:30 PM</option>
-                    <option value="03:00 PM">03:00 PM</option>
+                  <select className="form-input" style={{ paddingLeft: '1rem' }} value={bookTime} onChange={(e) => setBookTime(e.target.value)} required>
+                    <option value="">-- Choose Slot --</option>
+                    {generateSlotsForDoctor(dbDoctors.find(d => d._id === bookDocId) || doctors.find(d => d.id === parseInt(bookDocId))).map((slot, i) => (
+                      <option key={i} value={slot} disabled={slot === 'No slots available'}>{slot}</option>
+                    ))}
                   </select>
                 </div>
               </div>
 
               <div className="form-group">
                 <label>Consulting Doctor</label>
-                <select className="form-input" style={{ paddingLeft: '1rem' }} value={bookDocId} onChange={(e) => setBookDocId(e.target.value)}>
-                  {doctors.map(d => (
-                    <option key={d.id} value={d.id}>{d.name} ({d.department})</option>
+                <select className="form-input" style={{ paddingLeft: '1rem' }} value={bookDocId} onChange={(e) => {
+                  setBookDocId(e.target.value);
+                  setBookTime('');
+                }} required>
+                  <option value="">-- Select Doctor --</option>
+                  {dbDoctors.map(d => (
+                    <option key={d._id} value={d._id}>{d.name}</option>
+                  ))}
+                  {dbDoctors.length === 0 && doctors.map(d => (
+                    <option key={d.id} value={d.id}>{d.name}</option>
                   ))}
                 </select>
               </div>

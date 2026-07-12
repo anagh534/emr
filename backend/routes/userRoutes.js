@@ -1,8 +1,8 @@
 const express = require('express');
 const router = express.Router();
-const { getUsers, toggleUserStatus, deleteUser, changePassword } = require('../controllers/userController');
+const { getUsers, toggleUserStatus, deleteUser, changePassword, updateSchedule } = require('../controllers/userController');
 const { protect, restrictTo } = require('../middleware/authMiddleware');
-const { validateChangePassword, validateToggleStatus } = require('../validators/userValidator');
+const { validateChangePassword, validateToggleStatus, validateSchedule } = require('../validators/userValidator');
 
 // Lock all user management endpoints to Super Admins only
 router.use(protect);
@@ -16,6 +16,9 @@ router.route('/:id/status')
 
 router.route('/:id/password')
     .patch(validateChangePassword, changePassword);
+
+router.route('/:id/schedule')
+    .patch(validateSchedule, updateSchedule);
 
 router.route('/:id')
     .delete(deleteUser);
