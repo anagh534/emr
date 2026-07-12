@@ -8,9 +8,10 @@ const {
     getMe
 } = require('../controllers/authController');
 const { protect } = require('../middleware/authMiddleware');
+const { checkAnyPermission, PERMISSIONS } = require('../middleware/rbacMiddleware');
 
 // Authentication routes
-router.post('/register', register);
+router.post('/register', protect, checkAnyPermission([PERMISSIONS.CREATE_DOCTOR, PERMISSIONS.CREATE_RECEPTIONIST]), register);
 router.post('/login', login);
 router.post('/refresh', refresh);
 router.post('/logout', logout);

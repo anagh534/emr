@@ -108,3 +108,13 @@ export function useLogout() {
     },
   });
 }
+
+/**
+ * Hook for Super Admin to create new staff accounts (Doctors, Receptionists).
+ * Does not overwrite current admin session tokens.
+ */
+export function useCreateStaff() {
+  return useMutation({
+    mutationFn: (staffData) => authApi.register(staffData),
+  });
+}
