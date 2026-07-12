@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useLogout, useCreateStaff } from '../features/auth/hooks/useAuth';
 import { useUsersQuery, useToggleUserStatus, useDeleteUser, useChangeUserPassword, useUpdateUserSchedule } from '../features/users/hooks/useUsers';
+import { useSearchPatientsQuery, useCreatePatient } from '../features/patients/hooks/usePatients';
+import { useAppointmentsQuery, useCreateAppointment, useUpdateAppointment } from '../features/appointments/hooks/useAppointments';
 import { userApi } from '../features/users/services/userApi';
 import { 
   Activity, 
@@ -96,6 +98,7 @@ export default function Dashboard({ user }) {
     const handleClickOutside = () => {
       setShowNameSuggestions(false);
       setShowEmailSuggestions(false);
+      setShowPatientSuggestions(false);
     };
     document.addEventListener('click', handleClickOutside);
     return () => {
@@ -171,13 +174,85 @@ export default function Dashboard({ user }) {
   const { data: dbDoctorsResponse } = useUsersQuery({ limit: 100, role: 'Doctor' });
   const dbDoctors = dbDoctorsResponse?.data?.users || [];
 
-  // Reset bookDocId default to empty string so selection is forced
+  // Receptionist Booking Scheduler States
+  const createAppointmentMutation = useCreateAppointment();
+  const updateAppointmentMutation = useUpdateAppointment();
+
+  const [patientType, setPatientType] = useState('Existing'); // 'Existing' or 'New'
+  const [selectedPatientObj, setSelectedPatientObj] = useState(null);
+  const [bookPatientSearch, setBookPatientSearch] = useState('');
+  const [showPatientSuggestions, setShowPatientSuggestions] = useState(false);
+
+  // New Patient Form States
+  const [newPatName, setNewPatName] = useState('');
+  const [newPatMobile, setNewPatMobile] = useState('');
+  const [newPatAge, setNewPatAge] = useState('');
+  const [newPatHistory, setNewPatHistory] = useState('');
+
+  // Booking details
   const [bookDocId, setBookDocId] = useState('');
-  const [bookTime, setBookTime] = useState('09:00 AM');
+  const [bookTime, setBookTime] = useState('');
+  const [bookDate, setBookDate] = useState(new Date().toLocaleDateString('sv'));
+  const [bookPurpose, setBookPurpose] = useState('');
+  const [bookNotes, setBookNotes] = useState('');
+
+  // Autocomplete patient search queries
+  const { data: patientSearchResponse } = useSearchPatientsQuery(bookPatientSearch);
+  const patientSuggestions = patientSearchResponse?.data || [];
+
+  // Pagination & Filters States for Appointments Registry
+  const [apptLimit, setApptLimit] = useState(5);
+  const [apptOffset, setApptOffset] = useState(0);
+
+  // Registry search filter inputs (local state)
+  const [filterDoc, setFilterDoc] = useState('');
+  const [filterPat, setFilterPat] = useState('');
+  const [filterMob, setFilterMob] = useState('');
+  const [filterDept, setFilterDept] = useState('All');
+  const [filterApptStatus, setFilterApptStatus] = useState('All');
+  const [filterStart, setFilterStart] = useState('');
+  const [filterEnd, setFilterEnd] = useState('');
+
+  // Applied registry search filters passed into the query
+  const [appliedDoc, setAppliedDoc] = useState('');
+  const [appliedPat, setAppliedPat] = useState('');
+  const [appliedMob, setAppliedMob] = useState('');
+  const [appliedDept, setAppliedDept] = useState('All');
+  const [appliedApptStatus, setAppliedApptStatus] = useState('All');
+  const [appliedStart, setAppliedStart] = useState('');
+  const [appliedEnd, setAppliedEnd] = useState('');
+
+  // Fetch appointments registry dynamically from server with applied filters
+  const { data: registryResponse, isLoading: isRegistryLoading, isError: isRegistryError } = useAppointmentsQuery({
+    limit: apptLimit,
+    offset: apptOffset,
+    doctorSearch: appliedDoc,
+    patientSearch: appliedPat,
+    mobileSearch: appliedMob,
+    department: appliedDept,
+    status: appliedApptStatus,
+    startDate: appliedStart,
+    endDate: appliedEnd
+  });
+
+  // Query booked slots for the selected doctor on the selected date to display scheduler grid
+  const selectedDoctorObjForBooking = dbDoctors.find(d => d._id === bookDocId);
+  const { data: dayAppointmentsResponse } = useAppointmentsQuery({
+    doctorSearch: selectedDoctorObjForBooking?.name,
+    startDate: bookDate,
+    endDate: bookDate,
+    limit: 100 // load all slots booked today
+  });
+  const bookedSlotsList = dayAppointmentsResponse?.data?.appointments?.map(a => a.timeSlot) || [];
+
+  // Inline editing state for appointments registry
+  const [editingApptId, setEditingApptId] = useState(null);
+  const [editingPurpose, setEditingPurpose] = useState('');
+  const [editingNotes, setEditingNotes] = useState('');
 
   // Doctor: Select Patient & Edit Consultation Notes
-  const [selectedApptId, setSelectedApptId] = useState(201);
-  const [consultNotes, setConsultNotes] = useState('Blood pressure is 140/90. Suggested low sodium diet.');
+  const [selectedApptId, setSelectedApptId] = useState('');
+  const [consultNotes, setConsultNotes] = useState('');
   const [notesMessage, setNotesMessage] = useState('');
 
   // Find current logged in Doctor ID for filtering
@@ -443,7 +518,7 @@ export default function Dashboard({ user }) {
     });
   };
 
-  // Helper to generate dynamic slot options while omitting breaks
+  // Helper to generate dynamic slot options while omitting breaks and past time slots
   const generateSlotsForDoctor = (doctor) => {
     if (!doctor || !doctor.schedule) {
       return ['09:00 AM', '09:30 AM', '10:00 AM', '10:30 AM', '11:00 AM', '11:30 AM', '01:30 PM', '02:00 PM', '02:30 PM', '03:00 PM', '03:30 PM', '04:00 PM', '04:30 PM'];
@@ -451,6 +526,11 @@ export default function Dashboard({ user }) {
 
     const { sessions, breaks, slotDuration } = doctor.schedule;
     const slots = [];
+
+    const todayStr = new Date().toLocaleDateString('sv');
+    const isToday = bookDate === todayStr;
+    const now = new Date();
+    const currentMin = now.getHours() * 60 + now.getMinutes();
 
     const toMinutes = (timeStr) => {
       if (!timeStr) return 0;
@@ -479,6 +559,11 @@ export default function Dashboard({ user }) {
       const sessionEnd = toMinutes(sess.endTime);
 
       for (let time = sessionStart; time + slotDuration <= sessionEnd; time += slotDuration) {
+        // Skip past time slots if date is today
+        if (isToday && time <= currentMin) {
+          continue;
+        }
+
         // Slot overlaps break if slot start is inside [brk.start, brk.end)
         // or if slot end is inside (brk.start, brk.end] or contains it
         const slotStart = time;
@@ -498,43 +583,134 @@ export default function Dashboard({ user }) {
     return slots.length > 0 ? slots : ['No slots available'];
   };
 
-  const handleBookAppointment = (e) => {
-    e.preventDefault();
-    if (!bookName || !bookAge || !bookReason) return;
-
-    const newAppt = {
-      id: appointments.length + 201,
-      patientName: bookName,
-      age: parseInt(bookAge),
-      reason: bookReason,
-      status: 'Scheduled',
-      room: 'None',
-      doctorId: parseInt(bookDocId),
-      time: bookTime,
-      date: '2026-07-12',
-      notes: ''
-    };
-
-    setAppointments([...appointments, newAppt]);
-    
-    // Add to patients list if new
-    if (!patients.some(p => p.name.toLowerCase() === bookName.toLowerCase())) {
-      setPatients([
-        ...patients,
-        { id: patients.length + 101, name: bookName, age: parseInt(bookAge), history: 'No records', contact: '+1-555-0100' }
-      ]);
-    }
-
-    setBookName('');
-    setBookAge('');
-    setBookReason('');
-    alert(`Appointment booked successfully for ${bookName} at ${bookTime}!`);
+  const handleSelectPatient = (patient) => {
+    setSelectedPatientObj(patient);
+    setBookPatientSearch(patient.name);
+    setShowPatientSuggestions(false);
   };
 
-  const handleMarkArrived = (apptId) => {
-    setAppointments(appointments.map(appt => 
-      appt.id === apptId ? { ...appt, status: 'Checked In', room: '101' } : appt
-    ));
+  const handleBookAppointment = (e) => {
+    e.preventDefault();
+
+    if (!bookDocId) {
+      addToast('Please select a doctor', 'error');
+      return;
+    }
+    if (!bookTime) {
+      addToast('Please select an available time slot', 'error');
+      return;
+    }
+    if (!bookPurpose) {
+      addToast('Please provide a reason for the visit', 'error');
+      return;
+    }
+
+    const payload = {
+      doctorId: bookDocId,
+      date: bookDate,
+      timeSlot: bookTime,
+      purpose: bookPurpose,
+      notes: bookNotes
+    };
+
+    if (patientType === 'Existing') {
+      if (!selectedPatientObj) {
+        addToast('Please select an existing patient from suggestions', 'error');
+        return;
+      }
+      payload.patientId = selectedPatientObj.patientId;
+    } else {
+      if (!newPatName || !newPatMobile || !newPatAge) {
+        addToast('Please fill in new patient name, contact, and age', 'error');
+        return;
+      }
+      payload.patientData = {
+        name: newPatName,
+        mobileNumber: newPatMobile,
+        age: parseInt(newPatAge, 10),
+        history: newPatHistory
+      };
+    }
+
+    createAppointmentMutation.mutate(payload, {
+      onSuccess: () => {
+        addToast('Appointment booked successfully!', 'success');
+        // Reset form
+        setBookPurpose('');
+        setBookNotes('');
+        setBookTime('');
+        if (patientType === 'New') {
+          setNewPatName('');
+          setNewPatMobile('');
+          setNewPatAge('');
+          setNewPatHistory('');
+        } else {
+          setBookPatientSearch('');
+          setSelectedPatientObj(null);
+        }
+      },
+      onError: (err) => {
+        addToast(err.response?.data?.message || 'Failed to book appointment', 'error');
+      }
+    });
+  };
+
+  const handleUpdateStatus = (apptId, newStatus) => {
+    updateAppointmentMutation.mutate({
+      id: apptId,
+      updateData: { status: newStatus }
+    }, {
+      onSuccess: () => {
+        addToast(`Appointment status updated to ${newStatus}`, 'success');
+      },
+      onError: (err) => {
+        addToast(err.response?.data?.message || 'Failed to update status', 'error');
+      }
+    });
+  };
+
+  const handleSaveInlineEdit = (apptId) => {
+    updateAppointmentMutation.mutate({
+      id: apptId,
+      updateData: { purpose: editingPurpose, notes: editingNotes }
+    }, {
+      onSuccess: () => {
+        addToast('Appointment details saved', 'success');
+        setEditingApptId(null);
+      },
+      onError: (err) => {
+        addToast(err.response?.data?.message || 'Failed to update appointment details', 'error');
+      }
+    });
+  };
+
+  const handleApplyApptFilters = () => {
+    setAppliedDoc(filterDoc);
+    setAppliedPat(filterPat);
+    setAppliedMob(filterMob);
+    setAppliedDept(filterDept);
+    setAppliedApptStatus(filterApptStatus);
+    setAppliedStart(filterStart);
+    setAppliedEnd(filterEnd);
+    setApptOffset(0);
+  };
+
+  const handleResetApptFilters = () => {
+    setFilterDoc('');
+    setFilterPat('');
+    setFilterMob('');
+    setFilterDept('All');
+    setFilterApptStatus('All');
+    setFilterStart('');
+    setFilterEnd('');
+    setAppliedDoc('');
+    setAppliedPat('');
+    setAppliedMob('');
+    setAppliedDept('All');
+    setAppliedApptStatus('All');
+    setAppliedStart('');
+    setAppliedEnd('');
+    setApptOffset(0);
   };
 
   const handleUpdateNotes = (e) => {
@@ -1331,13 +1507,11 @@ export default function Dashboard({ user }) {
     }
 
     if (activeTab === 'patients') {
-      const filteredPatients = patients.filter(p => 
-        p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-        p.history.toLowerCase().includes(searchQuery.toLowerCase())
-      );
+      const { data: receptionistPatientsSearchResponse } = useSearchPatientsQuery(searchQuery);
+      const receptionistPatients = searchQuery.trim() ? (receptionistPatientsSearchResponse?.data || []) : [];
 
       return (
-        <div className="glass-card">
+        <div className="glass-card" style={{ width: '100%' }}>
           <h2 style={{ fontSize: '1.25rem', marginBottom: '1.25rem', fontFamily: 'var(--font-title)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <Search size={20} style={{ color: 'var(--primary)' }} />
             Search Patients Database
@@ -1351,7 +1525,7 @@ export default function Dashboard({ user }) {
               <input 
                 type="text" 
                 className="form-input" 
-                placeholder="Search patient name, medical history..." 
+                placeholder="Search patient ID, name, mobile..." 
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
@@ -1362,25 +1536,27 @@ export default function Dashboard({ user }) {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem', textAlign: 'left' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--border-medium)', color: 'var(--text-secondary)' }}>
+                  <th style={{ padding: '0.75rem' }}>Patient ID</th>
                   <th style={{ padding: '0.75rem' }}>Patient Name</th>
                   <th style={{ padding: '0.75rem' }}>Age</th>
-                  <th style={{ padding: '0.75rem' }}>Contact</th>
+                  <th style={{ padding: '0.75rem' }}>Mobile Contact</th>
                   <th style={{ padding: '0.75rem' }}>Medical History Summary</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredPatients.map(p => (
-                  <tr key={p.id} style={{ borderBottom: '1px solid var(--border-light)' }}>
+                {receptionistPatients.map(p => (
+                  <tr key={p._id} style={{ borderBottom: '1px solid var(--border-light)' }}>
+                    <td style={{ padding: '0.75rem', fontWeight: 'bold', color: 'var(--primary)' }}>{p.patientId}</td>
                     <td style={{ padding: '0.75rem', fontWeight: 600 }}>{p.name}</td>
                     <td style={{ padding: '0.75rem' }}>{p.age}</td>
-                    <td style={{ padding: '0.75rem', color: 'var(--text-secondary)' }}>{p.contact}</td>
-                    <td style={{ padding: '0.75rem', color: 'var(--text-muted)' }}>{p.history}</td>
+                    <td style={{ padding: '0.75rem', color: 'var(--text-secondary)' }}>{p.mobileNumber}</td>
+                    <td style={{ padding: '0.75rem', color: 'var(--text-muted)' }}>{p.history || 'No records'}</td>
                   </tr>
                 ))}
-                {filteredPatients.length === 0 && (
+                {receptionistPatients.length === 0 && (
                   <tr>
-                    <td colSpan={4} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-                      No patients found matching query
+                    <td colSpan={5} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                      {searchQuery.trim() ? 'No patients found matching query' : 'Type name, ID, or mobile number to search...'}
                     </td>
                   </tr>
                 )}
@@ -1393,98 +1569,468 @@ export default function Dashboard({ user }) {
 
     if (activeTab === 'appointments_mgmt') {
       return (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '1.5rem' }}>
-          {/* Booking Form */}
-          <div className="glass-card">
-            <h2 style={{ fontSize: '1.25rem', marginBottom: '1.25rem', fontFamily: 'var(--font-title)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <PlusCircle size={20} style={{ color: 'var(--primary)' }} />
-              Book Appointments
-            </h2>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem', width: '100%' }}>
+          {/* Top: Scheduler & Booking Panel */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(450px, 1fr))', gap: '1.5rem', width: '100%' }}>
+            
+            {/* Appointment Booking Form */}
+            <div className="glass-card">
+              <h2 style={{ fontSize: '1.25rem', marginBottom: '1.25rem', fontFamily: 'var(--font-title)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <PlusCircle size={20} style={{ color: 'var(--primary)' }} />
+                Appointment Booking Gate
+              </h2>
 
-            <form onSubmit={handleBookAppointment}>
-              <div className="form-group">
-                <label>Patient Full Name</label>
-                <input type="text" className="form-input" style={{ paddingLeft: '1rem' }} placeholder="Elizabeth Bennet" value={bookName} onChange={(e) => setBookName(e.target.value)} required />
+              {/* Patient Type Select Buttons */}
+              <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem', background: 'rgba(255,255,255,0.02)', padding: '0.25rem', borderRadius: 'var(--radius-sm)' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPatientType('Existing');
+                    setSelectedPatientObj(null);
+                    setBookPatientSearch('');
+                  }}
+                  className={`btn ${patientType === 'Existing' ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ flex: 1, padding: '0.4rem 0.5rem', fontSize: '0.8rem', border: 'none' }}
+                >
+                  Existing Patient
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPatientType('New');
+                    setSelectedPatientObj(null);
+                    setBookPatientSearch('');
+                  }}
+                  className={`btn ${patientType === 'New' ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ flex: 1, padding: '0.4rem 0.5rem', fontSize: '0.8rem', border: 'none' }}
+                >
+                  New Patient
+                </button>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                <div className="form-group">
-                  <label>Age</label>
-                  <input type="number" className="form-input" style={{ paddingLeft: '1rem' }} placeholder="34" value={bookAge} onChange={(e) => setBookAge(e.target.value)} required />
-                </div>
-                 <div className="form-group">
-                  <label>Time Slot</label>
-                  <select className="form-input" style={{ paddingLeft: '1rem' }} value={bookTime} onChange={(e) => setBookTime(e.target.value)} required>
-                    <option value="">-- Choose Slot --</option>
-                    {generateSlotsForDoctor(dbDoctors.find(d => d._id === bookDocId) || doctors.find(d => d.id === parseInt(bookDocId))).map((slot, i) => (
-                      <option key={i} value={slot} disabled={slot === 'No slots available'}>{slot}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label>Consulting Doctor</label>
-                <select className="form-input" style={{ paddingLeft: '1rem' }} value={bookDocId} onChange={(e) => {
-                  setBookDocId(e.target.value);
-                  setBookTime('');
-                }} required>
-                  <option value="">-- Select Doctor --</option>
-                  {dbDoctors.map(d => (
-                    <option key={d._id} value={d._id}>{d.name}</option>
-                  ))}
-                  {dbDoctors.length === 0 && doctors.map(d => (
-                    <option key={d.id} value={d.id}>{d.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="form-group">
-                <label>Reason for Visit</label>
-                <input type="text" className="form-input" style={{ paddingLeft: '1rem' }} placeholder="Chronic cough review" value={bookReason} onChange={(e) => setBookReason(e.target.value)} required />
-              </div>
-
-              <button type="submit" className="btn btn-primary btn-block" style={{ marginTop: '1rem' }}>
-                Book Schedule
-              </button>
-            </form>
-          </div>
-
-          {/* List of Appointments & Toggles */}
-          <div className="glass-card">
-            <h2 style={{ fontSize: '1.25rem', marginBottom: '1.25rem', fontFamily: 'var(--font-title)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Calendar size={20} style={{ color: 'var(--primary)' }} />
-              Manage Booked Appointments
-            </h2>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {appointments.map(appt => (
-                <div key={appt.id} style={{ padding: '1rem', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-md)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <h4 style={{ fontWeight: 600 }}>{appt.patientName}</h4>
-                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginTop: '0.2rem' }}>
-                      Reason: {appt.reason} • Time: {appt.time}
-                    </p>
-                    <div style={{ marginTop: '0.4rem' }}>
-                      <span className={`badge ${appt.status === 'Checked In' ? 'badge-success' : 'badge-warning'}`}>
-                        {appt.status}
+              <form onSubmit={handleBookAppointment}>
+                
+                {patientType === 'Existing' ? (
+                  /* Existing Patient Selector */
+                  <div className="form-group" style={{ position: 'relative' }} onClick={(e) => e.stopPropagation()}>
+                    <label>Search Existing Patient (Name, Mobile, or ID)</label>
+                    <div className="input-wrapper">
+                      <span className="input-icon" style={{ left: '0.75rem' }}>
+                        <Search size={14} />
                       </span>
+                      <input
+                        type="text"
+                        className="form-input"
+                        style={{ paddingLeft: '2rem' }}
+                        placeholder="Type to search..."
+                        value={bookPatientSearch}
+                        onChange={(e) => {
+                          setBookPatientSearch(e.target.value);
+                          setShowPatientSuggestions(true);
+                          if (selectedPatientObj) setSelectedPatientObj(null);
+                        }}
+                        required
+                      />
+                    </div>
+                    {showPatientSuggestions && patientSuggestions.length > 0 && (
+                      <ul
+                        style={{
+                          position: 'absolute',
+                          top: '100%',
+                          left: 0,
+                          width: '100%',
+                          backgroundColor: '#111827',
+                          border: '1px solid var(--border-medium)',
+                          borderRadius: 'var(--radius-md)',
+                          zIndex: 60,
+                          maxHeight: '130px',
+                          overflowY: 'auto',
+                          listStyle: 'none',
+                          margin: '0.25rem 0 0 0',
+                          padding: '0.15rem 0',
+                          boxShadow: 'var(--shadow-lg)'
+                        }}
+                      >
+                        {patientSuggestions.map(p => (
+                          <li
+                            key={p._id}
+                            onClick={() => handleSelectPatient(p)}
+                            style={{
+                              padding: '0.35rem 0.65rem',
+                              cursor: 'pointer',
+                              borderBottom: '1px solid rgba(255,255,255,0.02)',
+                              fontSize: '0.775rem',
+                              color: 'var(--text-main)'
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'}
+                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                          >
+                            <strong>{p.name}</strong> ({p.mobileNumber}) - <span style={{ color: 'var(--primary)' }}>{p.patientId}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {selectedPatientObj && (
+                      <div style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: 'var(--success)', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                        <CheckCircle2 size={12} />
+                        Linked to: {selectedPatientObj.name} ({selectedPatientObj.patientId})
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  /* New Patient Registration Card */
+                  <div style={{ padding: '1rem', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-md)', marginBottom: '1rem' }}>
+                    <h4 style={{ fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.75rem', color: 'var(--primary)' }}>Register New Patient Record</h4>
+                    <div className="form-group">
+                      <label>Patient Full Name</label>
+                      <input type="text" className="form-input" placeholder="Elizabeth Bennet" value={newPatName} onChange={(e) => setNewPatName(e.target.value)} required />
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                      <div className="form-group">
+                        <label>Mobile Number</label>
+                        <input type="text" className="form-input" placeholder="9876543210" value={newPatMobile} onChange={(e) => setNewPatMobile(e.target.value)} required />
+                      </div>
+                      <div className="form-group">
+                        <label>Age</label>
+                        <input type="number" className="form-input" placeholder="34" value={newPatAge} onChange={(e) => setNewPatAge(e.target.value)} required />
+                      </div>
+                    </div>
+                    <div className="form-group">
+                      <label>Medical History Summary (Optional)</label>
+                      <input type="text" className="form-input" placeholder="Mild Asthma, Penicillin allergy..." value={newPatHistory} onChange={(e) => setNewPatHistory(e.target.value)} />
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                  <div className="form-group">
+                    <label>Consulting Doctor</label>
+                    <select className="form-input" style={{ paddingLeft: '1rem' }} value={bookDocId} onChange={(e) => {
+                      setBookDocId(e.target.value);
+                      setBookTime('');
+                    }} required>
+                      <option value="">-- Choose Doctor --</option>
+                      {dbDoctors.map(d => (
+                        <option key={d._id} value={d._id}>{d.name} ({d.schedule?.department || 'General'})</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Appointment Date</label>
+                    <input 
+                      type="date" 
+                      className="form-input" 
+                      style={{ paddingLeft: '1rem' }} 
+                      value={bookDate} 
+                      onChange={(e) => {
+                        setBookDate(e.target.value);
+                        setBookTime('');
+                      }} 
+                      min={new Date().toLocaleDateString('sv')}
+                      required 
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label>Reason for Visit (Purpose)</label>
+                  <input type="text" className="form-input" style={{ paddingLeft: '1rem' }} placeholder="Chronic cough review" value={bookPurpose} onChange={(e) => setBookPurpose(e.target.value)} required />
+                </div>
+
+                <div className="form-group">
+                  <label>Internal Consultation Notes (Optional)</label>
+                  <textarea className="form-input" style={{ padding: '0.5rem 1rem', minHeight: '50px' }} placeholder="Notes for consulting clinical doctor..." value={bookNotes} onChange={(e) => setBookNotes(e.target.value)} />
+                </div>
+
+                <button type="submit" disabled={createAppointmentMutation.isPending} className="btn btn-primary btn-block" style={{ marginTop: '1rem' }}>
+                  {createAppointmentMutation.isPending ? 'Booking Slot...' : 'Book Schedule Appointment'}
+                </button>
+              </form>
+            </div>
+
+            {/* Scheduler Available / Booked Grid Display */}
+            <div className="glass-card">
+              <h2 style={{ fontSize: '1.25rem', marginBottom: '0.5rem', fontFamily: 'var(--font-title)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Clock size={20} style={{ color: 'var(--primary)' }} />
+                Appointment Scheduler
+              </h2>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginBottom: '1.25rem' }}>
+                Select a doctor and date on the left to see slot availability. Slots are auto-generated based on shifts and exclude breaks and past timings.
+              </p>
+
+              {selectedDoctorObjForBooking ? (
+                <div>
+                  <div style={{ marginBottom: '1rem', padding: '0.75rem', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-md)', fontSize: '0.8rem' }}>
+                    <strong>Doctor Shift Profile:</strong> {selectedDoctorObjForBooking.name}
+                    <div style={{ marginTop: '0.25rem', color: 'var(--text-secondary)' }}>
+                      Slot Duration: {selectedDoctorObjForBooking.schedule?.slotDuration || 15} mins • 
+                      Sessions: {selectedDoctorObjForBooking.schedule?.sessions?.map(s => `${s.startTime}-${s.endTime}`).join(', ') || 'None'}
                     </div>
                   </div>
 
-                  {appt.status === 'Scheduled' && (
-                    <button 
-                      onClick={() => handleMarkArrived(appt.id)}
-                      className="btn btn-secondary" 
-                      style={{ padding: '0.4rem 0.8rem', fontSize: '0.75rem', display: 'flex', gap: '0.25rem' }}
-                    >
-                      <CheckCircle2 size={12} style={{ color: 'var(--success)' }} />
-                      Mark Arrived
-                    </button>
-                  )}
+                  <label style={{ fontSize: '0.85rem', fontWeight: 600, display: 'block', marginBottom: '0.5rem' }}>
+                    Shift Grid ({bookDate})
+                  </label>
+                  
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))', gap: '0.5rem', marginTop: '0.5rem' }}>
+                    {generateSlotsForDoctor(selectedDoctorObjForBooking).map((slot, i) => {
+                      const isBooked = bookedSlotsList.includes(slot);
+                      const isSelected = bookTime === slot;
+
+                      if (slot === 'No slots available') {
+                        return <div key={i} style={{ color: 'var(--text-muted)', fontSize: '0.8rem', gridColumn: '1 / -1' }}>No active slots available for today's shift.</div>;
+                      }
+
+                      return (
+                        <button
+                          key={i}
+                          type="button"
+                          disabled={isBooked}
+                          onClick={() => setBookTime(slot)}
+                          style={{
+                            padding: '0.4rem 0.25rem',
+                            fontSize: '0.75rem',
+                            borderRadius: 'var(--radius-sm)',
+                            border: isSelected ? '1px solid var(--primary)' : '1px solid var(--border-light)',
+                            background: isBooked ? 'rgba(239, 68, 68, 0.1)' : isSelected ? 'var(--primary)' : 'rgba(255,255,255,0.02)',
+                            color: isBooked ? 'var(--error)' : isSelected ? '#000' : 'var(--text-secondary)',
+                            cursor: isBooked ? 'not-allowed' : 'pointer',
+                            fontWeight: isSelected ? '600' : 'normal',
+                            textAlign: 'center',
+                            transition: 'all 0.15s ease'
+                          }}
+                        >
+                          <div>{slot}</div>
+                          <div style={{ fontSize: '0.6rem', opacity: 0.8, marginTop: '0.1rem' }}>
+                            {isBooked ? 'Booked' : isSelected ? 'Selected' : 'Available'}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              ))}
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '200px', color: 'var(--text-muted)', border: '1px dashed var(--border-light)', borderRadius: 'var(--radius-md)' }}>
+                  <Calendar size={32} style={{ marginBottom: '0.5rem', opacity: 0.5 }} />
+                  <p style={{ fontSize: '0.85rem' }}>Choose doctor to inspect slot rotations</p>
+                </div>
+              )}
             </div>
+          </div>
+
+          {/* Bottom: Booked Appointments Advanced Directory */}
+          <div className="glass-card" style={{ width: '100%', marginTop: '1rem' }}>
+            <h2 style={{ fontSize: '1.25rem', marginBottom: '1.25rem', fontFamily: 'var(--font-title)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <CalendarDays size={20} style={{ color: 'var(--primary)' }} />
+              Manage Booked Appointments
+            </h2>
+
+            {/* Filter Search Dashboard */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem', marginBottom: '1.5rem', padding: '1rem', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-md)' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Patient Search</label>
+                <input type="text" className="form-input" style={{ fontSize: '0.8rem', padding: '0.35rem 0.5rem', height: '32px' }} placeholder="Name or Patient ID..." value={filterPat} onChange={(e) => setFilterPat(e.target.value)} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Doctor Search</label>
+                <input type="text" className="form-input" style={{ fontSize: '0.8rem', padding: '0.35rem 0.5rem', height: '32px' }} placeholder="Doctor Name..." value={filterDoc} onChange={(e) => setFilterDoc(e.target.value)} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Mobile Search</label>
+                <input type="text" className="form-input" style={{ fontSize: '0.8rem', padding: '0.35rem 0.5rem', height: '32px' }} placeholder="Patient Mobile..." value={filterMob} onChange={(e) => setFilterMob(e.target.value)} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Department</label>
+                <select className="form-input" style={{ fontSize: '0.8rem', padding: '0.35rem 0.5rem', height: '32px' }} value={filterDept} onChange={(e) => setFilterDept(e.target.value)}>
+                  <option value="All">All Departments</option>
+                  <option value="Diagnostic Medicine">Diagnostic Medicine</option>
+                  <option value="Immunology">Immunology</option>
+                  <option value="Cardiology">Cardiology</option>
+                  <option value="General Medicine">General Medicine</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Status</label>
+                <select className="form-input" style={{ fontSize: '0.8rem', padding: '0.35rem 0.5rem', height: '32px' }} value={filterApptStatus} onChange={(e) => setFilterApptStatus(e.target.value)}>
+                  <option value="All">All Statuses</option>
+                  <option value="Scheduled">Scheduled</option>
+                  <option value="Arrived">Arrived</option>
+                  <option value="Completed">Completed</option>
+                  <option value="Cancelled">Cancelled</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Start Date</label>
+                <input type="date" className="form-input" style={{ fontSize: '0.8rem', padding: '0.25rem 0.5rem', height: '32px' }} value={filterStart} onChange={(e) => setFilterStart(e.target.value)} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>End Date</label>
+                <input type="date" className="form-input" style={{ fontSize: '0.8rem', padding: '0.25rem 0.5rem', height: '32px' }} value={filterEnd} onChange={(e) => setFilterEnd(e.target.value)} />
+              </div>
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end', gridColumn: '1 / -1', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
+                <button type="button" className="btn btn-secondary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }} onClick={handleResetApptFilters}>Reset</button>
+                <button type="button" className="btn btn-primary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }} onClick={handleApplyApptFilters}>Filter Appointments</button>
+              </div>
+            </div>
+
+            {/* Registry List Table */}
+            {isRegistryLoading ? (
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Loading appointments registry...</p>
+            ) : isRegistryError ? (
+              <p style={{ color: 'var(--error)', fontSize: '0.85rem' }}>Failed to query appointments from database.</p>
+            ) : (
+              <div style={{ overflowX: 'auto', width: '100%' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', textAlign: 'left' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid var(--border-medium)', color: 'var(--text-secondary)' }}>
+                      <th style={{ padding: '0.75rem' }}>Patient Details</th>
+                      <th style={{ padding: '0.75rem' }}>Assigned Doctor</th>
+                      <th style={{ padding: '0.75rem' }}>Schedule Slot</th>
+                      <th style={{ padding: '0.75rem' }}>Purpose & Notes</th>
+                      <th style={{ padding: '0.75rem' }}>Status</th>
+                      <th style={{ padding: '0.75rem', textAlign: 'right' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(registryResponse?.data?.appointments || []).map(appt => {
+                      const isEditing = editingApptId === appt._id;
+                      return (
+                        <tr key={appt._id} style={{ borderBottom: '1px solid var(--border-light)' }}>
+                          <td style={{ padding: '0.75rem' }}>
+                            <div style={{ fontWeight: 600 }}>{appt.patient?.name} (Age {appt.patient?.age})</div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>ID: {appt.patient?.patientId}</div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Mobile: {appt.patient?.mobileNumber}</div>
+                          </td>
+                          <td style={{ padding: '0.75rem' }}>
+                            <div>{appt.doctor?.name}</div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Dept: {appt.department}</div>
+                          </td>
+                          <td style={{ padding: '0.75rem' }}>
+                            <div style={{ fontWeight: 'bold' }}>{appt.timeSlot}</div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{appt.date}</div>
+                          </td>
+                          <td style={{ padding: '0.75rem' }}>
+                            {isEditing ? (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                                <input 
+                                  type="text" 
+                                  className="form-input" 
+                                  style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem', height: '28px' }} 
+                                  value={editingPurpose} 
+                                  onChange={(e) => setEditingPurpose(e.target.value)} 
+                                  placeholder="Purpose"
+                                />
+                                <input 
+                                  type="text" 
+                                  className="form-input" 
+                                  style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem', height: '28px' }} 
+                                  value={editingNotes} 
+                                  onChange={(e) => setEditingNotes(e.target.value)} 
+                                  placeholder="Notes"
+                                />
+                              </div>
+                            ) : (
+                              <div>
+                                <div><strong>Purpose:</strong> {appt.purpose}</div>
+                                {appt.notes && <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}><strong>Notes:</strong> {appt.notes}</div>}
+                              </div>
+                            )}
+                          </td>
+                          <td style={{ padding: '0.75rem' }}>
+                            <span className={`badge ${
+                              appt.status === 'Completed' ? 'badge-success' :
+                              appt.status === 'Arrived' ? 'badge-warning' :
+                              appt.status === 'Cancelled' ? 'badge-danger' : 'badge-primary'
+                            }`} style={{ 
+                              background: appt.status === 'Completed' ? 'rgba(16,185,129,0.1)' :
+                                          appt.status === 'Arrived' ? 'rgba(245,158,11,0.1)' :
+                                          appt.status === 'Cancelled' ? 'rgba(239,68,68,0.1)' : 'rgba(59,130,246,0.1)',
+                              color: appt.status === 'Completed' ? 'var(--success)' :
+                                     appt.status === 'Arrived' ? 'var(--warning)' :
+                                     appt.status === 'Cancelled' ? 'var(--error)' : 'var(--secondary)'
+                            }}>
+                              {appt.status}
+                            </span>
+                          </td>
+                          <td style={{ padding: '0.75rem', textAlign: 'right' }}>
+                            <div style={{ display: 'flex', gap: '0.35rem', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                              {isEditing ? (
+                                <>
+                                  <button onClick={() => handleSaveInlineEdit(appt._id)} className="btn btn-primary" style={{ padding: '0.25rem 0.5rem', fontSize: '0.7rem' }}>Save</button>
+                                  <button onClick={() => setEditingApptId(null)} className="btn btn-secondary" style={{ padding: '0.25rem 0.5rem', fontSize: '0.7rem' }}>Cancel</button>
+                                </>
+                              ) : (
+                                <>
+                                  {appt.status !== 'Completed' && appt.status !== 'Cancelled' && (
+                                    <button 
+                                      onClick={() => {
+                                        setEditingApptId(appt._id);
+                                        setEditingPurpose(appt.purpose);
+                                        setEditingNotes(appt.notes || '');
+                                      }} 
+                                      className="btn btn-secondary" 
+                                      style={{ padding: '0.25rem 0.5rem', fontSize: '0.7rem' }}
+                                    >
+                                      Edit Details
+                                    </button>
+                                  )}
+                                  {appt.status === 'Scheduled' && (
+                                    <button onClick={() => handleUpdateStatus(appt._id, 'Arrived')} className="btn btn-success" style={{ padding: '0.25rem 0.5rem', fontSize: '0.7rem', background: 'rgba(16,185,129,0.1)', color: 'var(--success)', border: '1px solid rgba(16,185,129,0.2)' }}>
+                                      Mark Arrived
+                                    </button>
+                                  )}
+                                  {appt.status === 'Arrived' && (
+                                    <button onClick={() => handleUpdateStatus(appt._id, 'Completed')} className="btn btn-success" style={{ padding: '0.25rem 0.5rem', fontSize: '0.7rem', background: 'rgba(16,185,129,0.1)', color: 'var(--success)', border: '1px solid rgba(16,185,129,0.2)' }}>
+                                      Mark Completed
+                                    </button>
+                                  )}
+                                  {(appt.status === 'Scheduled' || appt.status === 'Arrived') && (
+                                    <button onClick={() => handleUpdateStatus(appt._id, 'Cancelled')} className="btn btn-danger" style={{ padding: '0.25rem 0.5rem', fontSize: '0.7rem', background: 'rgba(239,68,68,0.1)', color: 'var(--error)', border: '1px solid rgba(239,68,68,0.2)' }}>
+                                      Cancel
+                                    </button>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {(!registryResponse?.data?.appointments || registryResponse?.data?.appointments.length === 0) && (
+                      <tr>
+                        <td colSpan={6} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>No booked appointments registered on database.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+
+                {/* Server-side Pagination Panel */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1.5rem', borderTop: '1px solid var(--border-light)', paddingTop: '1rem' }}>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                    Showing {apptOffset + 1} - {Math.min(apptOffset + apptLimit, registryResponse?.data?.totalCount || 0)} of {registryResponse?.data?.totalCount || 0} registry records
+                  </span>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <button 
+                      className="btn btn-secondary" 
+                      style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem' }}
+                      disabled={apptOffset === 0}
+                      onClick={() => setApptOffset(prev => Math.max(0, prev - apptLimit))}
+                    >
+                      Previous
+                    </button>
+                    <button 
+                      className="btn btn-secondary" 
+                      style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem' }}
+                      disabled={apptOffset + apptLimit >= (registryResponse?.data?.totalCount || 0)}
+                      onClick={() => setApptOffset(prev => prev + apptLimit)}
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+
+              </div>
+            )}
           </div>
         </div>
       );
@@ -1492,8 +2038,13 @@ export default function Dashboard({ user }) {
   };
 
   const renderDoctorTab = () => {
-    // Filter appointments: Doctor can only view their own appointments
-    const myAppts = appointments.filter(appt => appt.doctorId === currentDocId);
+    // Query doctor queue appointments dynamically from database
+    const { data: doctorQueueResponse } = useAppointmentsQuery({
+      doctorSearch: user.role === 'Doctor' ? user.name : undefined,
+      limit: 100
+    });
+    const myAppts = user.role === 'Doctor' ? (doctorQueueResponse?.data?.appointments || []) : [];
+    const activeAppt = myAppts.find(a => a._id === selectedApptId);
 
     if (activeTab === 'overview') {
       return (
@@ -1511,7 +2062,7 @@ export default function Dashboard({ user }) {
             <div className="glass-card stats-card">
               <div className="stats-info">
                 <h3>Checked In (Waiting)</h3>
-                <div className="value">{myAppts.filter(a => a.status === 'Checked In' || a.status === 'Waiting').length}</div>
+                <div className="value">{myAppts.filter(a => a.status === 'Arrived').length}</div>
               </div>
               <div className="stats-icon" style={{ color: 'var(--warning)' }}>
                 <Clock size={24} />
@@ -1519,8 +2070,8 @@ export default function Dashboard({ user }) {
             </div>
             <div className="glass-card stats-card">
               <div className="stats-info">
-                <h3>Completed Notes</h3>
-                <div className="value">{myAppts.filter(a => a.notes !== '').length}</div>
+                <h3>Completed Consults</h3>
+                <div className="value">{myAppts.filter(a => a.status === 'Completed').length}</div>
               </div>
               <div className="stats-icon" style={{ color: 'var(--success)' }}>
                 <CheckCircle2 size={24} />
@@ -1549,7 +2100,7 @@ export default function Dashboard({ user }) {
 
     if (activeTab === 'my_appointments') {
       return (
-        <div className="glass-card">
+        <div className="glass-card" style={{ width: '100%' }}>
           <h2 style={{ fontSize: '1.25rem', marginBottom: '1.25rem', fontFamily: 'var(--font-title)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <Calendar size={20} style={{ color: 'var(--primary)' }} />
             My Appointment Queue (Role Protected)
@@ -1561,21 +2112,29 @@ export default function Dashboard({ user }) {
                 <tr style={{ borderBottom: '1px solid var(--border-medium)', color: 'var(--text-secondary)' }}>
                   <th style={{ padding: '0.75rem' }}>Patient Name</th>
                   <th style={{ padding: '0.75rem' }}>Age</th>
-                  <th style={{ padding: '0.75rem' }}>Reason</th>
-                  <th style={{ padding: '0.75rem' }}>Time</th>
+                  <th style={{ padding: '0.75rem' }}>Reason (Purpose)</th>
+                  <th style={{ padding: '0.75rem' }}>Time Slot</th>
                   <th style={{ padding: '0.75rem' }}>Status</th>
                   <th style={{ padding: '0.75rem' }}>Active Consult Notes</th>
                 </tr>
               </thead>
               <tbody>
                 {myAppts.map(appt => (
-                  <tr key={appt.id} style={{ borderBottom: '1px solid var(--border-light)' }}>
-                    <td style={{ padding: '0.75rem', fontWeight: 600 }}>{appt.patientName}</td>
-                    <td style={{ padding: '0.75rem' }}>{appt.age}</td>
-                    <td style={{ padding: '0.75rem', color: 'var(--text-secondary)' }}>{appt.reason}</td>
-                    <td style={{ padding: '0.75rem' }}>{appt.time}</td>
+                  <tr key={appt._id} style={{ borderBottom: '1px solid var(--border-light)' }}>
+                    <td style={{ padding: '0.75rem', fontWeight: 600 }}>{appt.patient?.name}</td>
+                    <td style={{ padding: '0.75rem' }}>{appt.patient?.age}</td>
+                    <td style={{ padding: '0.75rem', color: 'var(--text-secondary)' }}>{appt.purpose}</td>
+                    <td style={{ padding: '0.75rem', fontWeight: 'bold' }}>{appt.timeSlot} ({appt.date})</td>
                     <td style={{ padding: '0.75rem' }}>
-                      <span className={`badge ${appt.status === 'Checked In' ? 'badge-success' : 'badge-warning'}`}>
+                      <span className={`badge ${
+                        appt.status === 'Completed' ? 'badge-success' :
+                        appt.status === 'Arrived' ? 'badge-warning' : 'badge-primary'
+                      }`} style={{
+                        background: appt.status === 'Completed' ? 'rgba(16,185,129,0.1)' :
+                                    appt.status === 'Arrived' ? 'rgba(245,158,11,0.1)' : 'rgba(59,130,246,0.1)',
+                        color: appt.status === 'Completed' ? 'var(--success)' :
+                               appt.status === 'Arrived' ? 'var(--warning)' : 'var(--secondary)'
+                      }}>
                         {appt.status}
                       </span>
                     </td>
@@ -1584,6 +2143,13 @@ export default function Dashboard({ user }) {
                     </td>
                   </tr>
                 ))}
+                {myAppts.length === 0 && (
+                  <tr>
+                    <td colSpan={6} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                      No patients in your queue today.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -1592,10 +2158,8 @@ export default function Dashboard({ user }) {
     }
 
     if (activeTab === 'consultations') {
-      const activeAppt = appointments.find(a => a.id === selectedApptId);
-
       return (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '1.5rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '1.5rem', width: '100%' }}>
           {/* Select & Update Consultation Notes */}
           <div className="glass-card">
             <h2 style={{ fontSize: '1.25rem', marginBottom: '1.25rem', fontFamily: 'var(--font-title)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -1613,12 +2177,14 @@ export default function Dashboard({ user }) {
               <div className="form-group">
                 <label>Select Active Patient Appt</label>
                 <select className="form-input" style={{ paddingLeft: '1rem' }} value={selectedApptId} onChange={(e) => {
-                  setSelectedApptId(parseInt(e.target.value));
-                  const appt = appointments.find(a => a.id === parseInt(e.target.value));
-                  if (appt) setConsultNotes(appt.notes);
+                  const val = e.target.value;
+                  setSelectedApptId(val);
+                  const appt = myAppts.find(a => a._id === val);
+                  if (appt) setConsultNotes(appt.notes || '');
                 }}>
+                  <option value="">-- Select Patient --</option>
                   {myAppts.map(appt => (
-                    <option key={appt.id} value={appt.id}>{appt.patientName} - {appt.reason} ({appt.time})</option>
+                    <option key={appt._id} value={appt._id}>{appt.patient?.name} - {appt.purpose} ({appt.timeSlot})</option>
                   ))}
                 </select>
               </div>
@@ -1636,8 +2202,8 @@ export default function Dashboard({ user }) {
                 />
               </div>
 
-              <button type="submit" className="btn btn-primary btn-block" style={{ marginTop: '1rem' }}>
-                Save Consultation Notes
+              <button type="submit" disabled={updateAppointmentMutation.isPending} className="btn btn-primary btn-block" style={{ marginTop: '1rem' }}>
+                {updateAppointmentMutation.isPending ? 'Saving Notes...' : 'Save Consultation Notes'}
               </button>
             </form>
           </div>
@@ -1653,22 +2219,26 @@ export default function Dashboard({ user }) {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 <div style={{ borderBottom: '1px solid var(--border-light)', paddingBottom: '0.75rem' }}>
                   <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>PATIENT</span>
-                  <h3 style={{ fontSize: '1.1rem', fontWeight: 600 }}>{activeAppt.patientName}</h3>
-                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Age: {activeAppt.age} • Contact: {patients.find(p => p.name === activeAppt.patientName)?.contact}</p>
+                  <h3 style={{ fontSize: '1.1rem', fontWeight: 600 }}>{activeAppt.patient?.name}</h3>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Age: {activeAppt.patient?.age} • Contact: {activeAppt.patient?.mobileNumber}</p>
+                  <p style={{ color: 'var(--primary)', fontSize: '0.8rem', fontWeight: 'bold', marginTop: '0.2rem' }}>ID: {activeAppt.patient?.patientId}</p>
                 </div>
                 <div style={{ borderBottom: '1px solid var(--border-light)', paddingBottom: '0.75rem' }}>
                   <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>CHIEF COMPLAINT</span>
-                  <p style={{ fontSize: '0.9rem', fontWeight: 500 }}>{activeAppt.reason}</p>
+                  <p style={{ fontSize: '0.9rem', fontWeight: 500 }}>{activeAppt.purpose}</p>
                 </div>
                 <div>
                   <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>MEDICAL HISTORY</span>
-                  <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                    {patients.find(p => p.name === activeAppt.patientName)?.history}
+                  <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
+                    {activeAppt.patient?.history || 'No recorded clinical history.'}
                   </p>
                 </div>
               </div>
             ) : (
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Select an appointment in the form to view full patient files.</p>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '200px', color: 'var(--text-muted)' }}>
+                <FileText size={32} style={{ marginBottom: '0.5rem', opacity: 0.5 }} />
+                <p style={{ fontSize: '0.85rem' }}>Select an appointment in the form to view full patient files.</p>
+              </div>
             )}
           </div>
         </div>
