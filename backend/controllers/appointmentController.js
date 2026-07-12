@@ -2,6 +2,7 @@ const Appointment = require('../models/Appointment');
 const Patient = require('../models/Patient');
 const User = require('../models/User');
 const logger = require('../utils/logger');
+const { logAction } = require('../utils/auditLogger');
 
 // Helper to get today's date in YYYY-MM-DD Swedish standard format
 const getTodayString = () => {
@@ -256,6 +257,7 @@ const createAppointment = async (req, res, next) => {
         }
 
         logger.info(`Appointment booked successfully: Patient ${patientObj.patientId} with Doctor ${doctorObj.name} at ${timeSlot} on ${date}`);
+        await logAction(req.user.email, req.user.role, 'Appointment Created', `Appointment: ${appointment._id}`);
 
         // Return populated appointment
         const populated = await Appointment.findById(appointment._id)
@@ -326,6 +328,9 @@ const updateAppointment = async (req, res, next) => {
             }
 
             appointment.status = targetStatus;
+            if (targetStatus === 'Cancelled') {
+                appointment.isCancelled = true;
+            }
         }
 
         if (purpose) appointment.purpose = purpose;
@@ -333,6 +338,7 @@ const updateAppointment = async (req, res, next) => {
 
         await appointment.save();
         logger.info(`Appointment ${id} updated: Status: ${appointment.status}`);
+        await logAction(req.user.email, req.user.role, appointment.status === 'Cancelled' ? 'Appointment Cancelled' : 'Appointment Updated', `Appointment: ${appointment._id}`);
 
         const populated = await Appointment.findById(appointment._id)
             .populate('patient')

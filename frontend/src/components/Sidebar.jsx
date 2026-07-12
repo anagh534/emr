@@ -7,7 +7,8 @@ import {
   Users, 
   Clipboard, 
   LogOut,
-  User
+  User,
+  History
 } from 'lucide-react';
 
 /**
@@ -71,6 +72,15 @@ export function Sidebar({ user, activeTab, setActiveTab, onLogout }) {
                 >
                   <Calendar size={18} />
                   Appointments
+                </button>
+              </li>
+              <li>
+                <button 
+                  onClick={() => setActiveTab('audit_logs')} 
+                  className={`nav-link btn-block ${activeTab === 'audit_logs' ? 'active' : ''}`}
+                >
+                  <History size={18} />
+                  System Audit Logs
                 </button>
               </li>
             </>

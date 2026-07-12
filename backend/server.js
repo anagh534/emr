@@ -28,6 +28,7 @@ app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/users', require('./routes/userRoutes'));
 app.use('/api/patients', require('./routes/patientRoutes'));
 app.use('/api/appointments', require('./routes/appointmentRoutes'));
+app.use('/api/audit-logs', require('./routes/auditLogRoutes'));
 
 // Route Not Found Handler
 app.use((req, res, next) => {

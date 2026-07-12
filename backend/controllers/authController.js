@@ -6,6 +6,7 @@ const {
     verifyRefreshToken
 } = require('../utils/jwtUtils');
 const logger = require('../utils/logger');
+const { logAction } = require('../utils/auditLogger');
 
 /**
  * Register a new user
@@ -146,6 +147,7 @@ const login = async (req, res, next) => {
         });
 
         logger.info(`User logged in: ${user.email}`);
+        await logAction(user.email, user.role, 'Login', `User: ${user._id}`);
 
         res.status(200).json({
             success: true,

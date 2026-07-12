@@ -40,6 +40,10 @@ const appointmentSchema = new mongoose.Schema({
             message: '{VALUE} is not a valid appointment status'
         },
         default: 'Scheduled'
+    },
+    isCancelled: {
+        type: Boolean,
+        default: false
     }
 }, {
     timestamps: true
@@ -50,7 +54,7 @@ appointmentSchema.index(
     { doctor: 1, date: 1, timeSlot: 1 }, 
     { 
         unique: true,
-        partialFilterExpression: { status: { $ne: 'Cancelled' } }
+        partialFilterExpression: { isCancelled: false }
     }
 );
 

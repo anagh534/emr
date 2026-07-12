@@ -12,6 +12,7 @@ import { DoctorAppointmentsQueue } from '../features/appointments/components/Doc
 import { DoctorConsultations } from '../features/appointments/components/DoctorConsultations';
 import { ProfileSettings } from '../components/ProfileSettings';
 import { useLogout } from '../features/auth/hooks/useAuth';
+import { AuditLogsRegistry } from '../features/audit/components/AuditLogsRegistry';
 
 import { 
   Activity, 
@@ -244,6 +245,9 @@ export default function Dashboard({ user }) {
     }
     if (activeTab === 'appointments') {
       return <AppointmentsRegistry />;
+    }
+    if (activeTab === 'audit_logs') {
+      return <AuditLogsRegistry />;
     }
   };
 
