@@ -75,6 +75,10 @@ const userSchema = new mongoose.Schema({
     timestamps: true
 });
 
+// Indexes to optimize staff listing and filtering queries
+userSchema.index({ role: 1, isActive: 1 });
+userSchema.index({ name: 1 });
+
 // Pre-save hook to hash password
 userSchema.pre('save', async function() {
     if (!this.isModified('password')) return;

@@ -29,6 +29,9 @@ const patientSchema = new mongoose.Schema({
     timestamps: true
 });
 
+// Index on patient name to optimize searches
+patientSchema.index({ name: 1 });
+
 // Auto-generate patientId before save
 patientSchema.pre('save', async function() {
     if (!this.patientId) {
