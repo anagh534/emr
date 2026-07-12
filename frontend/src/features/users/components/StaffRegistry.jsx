@@ -58,6 +58,7 @@ export function StaffRegistry({ currentUser }) {
   const [activePasswordEditId, setActivePasswordEditId] = useState(null);
   const [newPasswordVal, setNewPasswordVal] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showStaffPassword, setShowStaffPassword] = useState(false);
 
   // New staff form states
   const [staffName, setStaffName] = useState('');
@@ -215,6 +216,7 @@ export function StaffRegistry({ currentUser }) {
           setStaffEmail('');
           setStaffPassword('');
           setEmailSuggestion('');
+          setShowStaffPassword(false);
         },
         onError: (err) => {
           const msg = err.response?.data?.message || 'Error creating staff. Email may already exist.';
@@ -623,14 +625,24 @@ export function StaffRegistry({ currentUser }) {
 
               <div className="form-group">
                 <label>Temporary Password</label>
-                <input 
-                  type="password" 
-                  className="form-input" 
-                  placeholder="Minimum 6 characters" 
-                  value={staffPassword} 
-                  onChange={(e) => setStaffPassword(e.target.value)} 
-                  required 
-                />
+                <div style={{ position: 'relative' }}>
+                  <input 
+                    type={showStaffPassword ? "text" : "password"} 
+                    className="form-input" 
+                    placeholder="Minimum 6 characters" 
+                    value={staffPassword} 
+                    onChange={(e) => setStaffPassword(e.target.value)} 
+                    style={{ paddingRight: '2.5rem' }}
+                    required 
+                  />
+                  <button 
+                    type="button"
+                    onClick={() => setShowStaffPassword(!showStaffPassword)}
+                    style={{ position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', padding: 0 }}
+                  >
+                    {showStaffPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
