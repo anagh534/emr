@@ -164,7 +164,7 @@ export default function Dashboard({ user }) {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '1.5rem', marginTop: '2rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem', marginTop: '2rem' }}>
             {/* Department Workload Distribution Chart */}
             <div className="glass-card">
               <h3 style={{ marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontFamily: 'var(--font-title)', fontSize: '1.1rem' }}>
@@ -285,7 +285,7 @@ export default function Dashboard({ user }) {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '1.5rem', marginTop: '2rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem', marginTop: '2rem' }}>
             <div className="glass-card">
               <h3 style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <UserCheck size={20} style={{ color: 'var(--primary)' }} />
@@ -354,7 +354,7 @@ export default function Dashboard({ user }) {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '1.5rem', marginTop: '2rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem', marginTop: '2rem' }}>
             <div className="glass-card">
               <h3 style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <Activity size={20} style={{ color: 'var(--primary)' }} />
@@ -394,14 +394,7 @@ export default function Dashboard({ user }) {
 
       {/* Main Panel Content Area */}
       <main className="main-content">
-        <header className="header-dashboard" style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '2rem',
-          borderBottom: '1px solid rgba(255,255,255,0.05)',
-          paddingBottom: '1.25rem'
-        }}>
+        <header className="header-dashboard">
           <div>
             <h1 className="welcome-title" style={{ fontSize: '1.5rem', fontWeight: '700', letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>
               {getPageTitle()}

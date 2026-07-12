@@ -544,35 +544,189 @@ a:hover {
   }
 }
 
+/* Responsive Layout Helpers & Components */
+.mobile-header {
+  display: none;
+}
+
+.sidebar-header-desktop {
+  display: block;
+}
+
+.header-dashboard {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  padding-bottom: 1.25rem;
+}
+
+/* Default Modal Max-Width rules for Desktop */
+.modal-content {
+  max-width: 500px;
+}
+
 /* Responsive Styles */
 @media (max-width: 768px) {
   .app-layout {
     flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
   }
   
-  .sidebar {
-    width: 100%;
-    border-right: none;
+  /* Mobile fixed top bar */
+  .mobile-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 60px;
+    background-color: var(--bg-surface);
     border-bottom: 1px solid var(--border-light);
-    padding: 1rem;
+    padding: 0 1.5rem;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 998;
   }
-  
-  .sidebar-brand {
-    margin-bottom: 1rem;
+
+  .mobile-toggle-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-primary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.25rem;
+    transition: var(--transition-fast);
   }
-  
-  .nav-menu {
-    flex-direction: row;
-    overflow-x: auto;
-    padding-bottom: 0.5rem;
+
+  .mobile-toggle-btn:hover {
+    color: var(--primary);
   }
-  
-  .user-profile-badge {
-    display: none; /* simple mobile styling */
+
+  /* Desktop elements hidden inside mobile drawer */
+  .sidebar-header-desktop {
+    display: none;
   }
-  
+
+  /* Transform vertical sidebar to fixed drawer */
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 280px;
+    height: 100vh !important;
+    z-index: 1000;
+    transform: translateX(-100%);
+    transition: transform var(--transition-normal);
+    border-right: 1px solid var(--border-light);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .sidebar.sidebar-open {
+    transform: translateX(0);
+  }
+
+  /* Backdrop filter overlay behind drawer */
+  .sidebar-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(2, 6, 23, 0.75);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    z-index: 999;
+    animation: fadeIn var(--transition-fast);
+  }
+
   .main-content {
+    margin-top: 60px; /* Pushes content below mobile header */
+    height: calc(100vh - 60px);
+    padding: 1.25rem;
+    overflow-y: auto;
+  }
+
+  /* Dashboard Header wraps vertically on mobile */
+  .header-dashboard {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+  }
+
+  .header-dashboard > div {
+    width: 100%;
+  }
+
+  .welcome-title {
+    font-size: 1.35rem !important;
+  }
+
+  /* Modals fill screen better on mobile */
+  .modal-overlay {
     padding: 1rem;
+  }
+
+  .modal-content {
+    padding: 1.5rem;
+    max-width: 100% !important;
+  }
+
+  /* Table to Cards Responsive transformation */
+  .responsive-table, 
+  .responsive-table thead, 
+  .responsive-table tbody, 
+  .responsive-table th, 
+  .responsive-table td, 
+  .responsive-table tr {
+    display: block;
+  }
+
+  .responsive-table thead {
+    display: none; /* Hide header columns */
+  }
+
+  .responsive-table tr {
+    margin-bottom: 1rem;
+    background: rgba(255, 255, 255, 0.01);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    padding: 1rem;
+  }
+
+  .responsive-table td {
+    width: 100% !important;
+    padding: 0.5rem 0.25rem !important;
+    border-bottom: none !important;
+    text-align: left !important;
+    position: relative;
+  }
+
+  .responsive-table td:not(:last-child) {
+    border-bottom: 1px dashed rgba(255, 255, 255, 0.05) !important;
+  }
+
+  .responsive-table td::before {
+    content: attr(data-label);
+    display: block;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--primary);
+    margin-bottom: 0.25rem;
+    opacity: 0.85;
+    letter-spacing: 0.025em;
+  }
+
+  .responsive-table td div {
+    justify-content: flex-start !important;
   }
 }
 

@@ -474,7 +474,7 @@ export function StaffRegistry({ currentUser }) {
           <p style={{ color: 'var(--error)', fontSize: '0.9rem' }}>Failed to retrieve registry records from backend.</p>
         ) : (
           <div style={{ overflowX: 'auto', width: '100%' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem', textAlign: 'left' }}>
+            <table className="responsive-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem', textAlign: 'left' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--border-medium)', color: 'var(--text-secondary)' }}>
                   <th style={{ padding: '0.75rem' }}>Name</th>
@@ -489,19 +489,19 @@ export function StaffRegistry({ currentUser }) {
                   const isSelf = currentUser?.email === u.email;
                   return (
                     <tr key={u._id} style={{ borderBottom: '1px solid var(--border-light)' }}>
-                      <td style={{ padding: '0.75rem', fontWeight: 600 }}>{u.name} {isSelf && <span style={{ color: 'var(--primary)', fontSize: '0.75rem', marginLeft: '0.25rem' }}>(You)</span>}</td>
-                      <td style={{ padding: '0.75rem', color: 'var(--text-secondary)' }}>{u.email}</td>
-                      <td style={{ padding: '0.75rem' }}>
+                      <td data-label="Name" style={{ padding: '0.75rem', fontWeight: 600 }}>{u.name} {isSelf && <span style={{ color: 'var(--primary)', fontSize: '0.75rem', marginLeft: '0.25rem' }}>(You)</span>}</td>
+                      <td data-label="Email" style={{ padding: '0.75rem', color: 'var(--text-secondary)' }}>{u.email}</td>
+                      <td data-label="Role" style={{ padding: '0.75rem' }}>
                         <span className={`badge badge-primary`} style={{ background: u.role === 'Super Admin' ? 'rgba(139,92,246,0.1)' : undefined, color: u.role === 'Super Admin' ? 'var(--primary)' : undefined }}>
                           {u.role}
                         </span>
                       </td>
-                      <td style={{ padding: '0.75rem' }}>
+                      <td data-label="Status" style={{ padding: '0.75rem' }}>
                         <span className={`badge ${u.isActive ? 'badge-success' : 'badge-warning'}`}>
                           {u.isActive ? 'Active' : 'Inactive'}
                         </span>
                       </td>
-                      <td style={{ padding: '0.75rem', textAlign: 'right' }}>
+                      <td data-label="Actions" style={{ padding: '0.75rem', textAlign: 'right' }}>
                         <div style={{ display: 'flex', gap: '0.35rem', justifyContent: 'flex-end' }}>
                           <button 
                             onClick={() => setActivePasswordEditId(u._id)}

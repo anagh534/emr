@@ -170,7 +170,7 @@ export function AppointmentsRegistry() {
         <p style={{ color: 'var(--error)', fontSize: '0.85rem' }}>Failed to query appointments from database.</p>
       ) : (
         <div style={{ overflowX: 'auto', width: '100%' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', textAlign: 'left' }}>
+          <table className="responsive-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', textAlign: 'left' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border-medium)', color: 'var(--text-secondary)' }}>
                 <th style={{ padding: '0.75rem' }}>Patient Details</th>
@@ -186,20 +186,20 @@ export function AppointmentsRegistry() {
                 const isEditing = editingApptId === appt._id;
                 return (
                   <tr key={appt._id} style={{ borderBottom: '1px solid var(--border-light)' }}>
-                    <td style={{ padding: '0.75rem' }}>
+                    <td data-label="Patient Details" style={{ padding: '0.75rem' }}>
                       <div style={{ fontWeight: 600 }}>{appt.patient?.name} (Age {appt.patient?.age})</div>
                       <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>ID: {appt.patient?.patientId}</div>
                       <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Mobile: {appt.patient?.mobileNumber}</div>
                     </td>
-                    <td style={{ padding: '0.75rem' }}>
+                    <td data-label="Assigned Doctor" style={{ padding: '0.75rem' }}>
                       <div>{appt.doctor?.name}</div>
                       <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Dept: {appt.department}</div>
                     </td>
-                    <td style={{ padding: '0.75rem' }}>
+                    <td data-label="Schedule Slot" style={{ padding: '0.75rem' }}>
                       <div style={{ fontWeight: 'bold' }}>{appt.timeSlot}</div>
                       <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{appt.date}</div>
                     </td>
-                    <td style={{ padding: '0.75rem' }}>
+                    <td data-label="Purpose & Notes" style={{ padding: '0.75rem' }}>
                       {isEditing ? (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
                           <input 
@@ -226,7 +226,7 @@ export function AppointmentsRegistry() {
                         </div>
                       )}
                     </td>
-                    <td style={{ padding: '0.75rem' }}>
+                    <td data-label="Status" style={{ padding: '0.75rem' }}>
                       <span className={`badge ${
                         appt.status === 'Completed' ? 'badge-success' :
                         appt.status === 'Arrived' ? 'badge-warning' :
@@ -242,7 +242,7 @@ export function AppointmentsRegistry() {
                         {appt.status}
                       </span>
                     </td>
-                    <td style={{ padding: '0.75rem', textAlign: 'right' }}>
+                    <td data-label="Actions" style={{ padding: '0.75rem', textAlign: 'right' }}>
                       <div style={{ display: 'flex', gap: '0.35rem', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
                         {isEditing ? (
                           <>

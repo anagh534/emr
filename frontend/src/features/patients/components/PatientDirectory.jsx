@@ -47,7 +47,7 @@ export function PatientDirectory() {
         <p style={{ color: 'var(--error)', fontSize: '0.9rem' }}>Failed to retrieve patient registry records.</p>
       ) : (
         <div style={{ overflowX: 'auto', width: '100%' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem', textAlign: 'left' }}>
+          <table className="responsive-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem', textAlign: 'left' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border-medium)', color: 'var(--text-secondary)' }}>
                 <th style={{ padding: '0.75rem', width: '45%' }}>Patient Profile</th>
@@ -58,7 +58,7 @@ export function PatientDirectory() {
               {receptionistPatients.map(p => (
                 <tr key={p._id} style={{ borderBottom: '1px solid var(--border-light)', verticalAlign: 'top' }}>
                   {/* Column 1: Patient Profile */}
-                  <td style={{ padding: '1rem 0.75rem' }}>
+                  <td data-label="Patient Profile" style={{ padding: '1rem 0.75rem' }}>
                     <div style={{ fontWeight: 600, fontSize: '1rem', color: 'var(--text-main)' }}>{p.name} ({p.age} years old)</div>
                     <div style={{ fontSize: '0.8rem', color: 'var(--primary)', fontWeight: 'bold', marginTop: '0.2rem' }}>ID: {p.patientId}</div>
                     <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.1rem' }}>Mobile: {p.mobileNumber}</div>
@@ -70,7 +70,7 @@ export function PatientDirectory() {
                   </td>
                   
                   {/* Column 2: Booking Details */}
-                  <td style={{ padding: '1rem 0.75rem' }}>
+                  <td data-label="Booking Details" style={{ padding: '1rem 0.75rem' }}>
                     {p.bookings && p.bookings.length > 0 ? (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                         {p.bookings.map(b => (
