@@ -25,6 +25,7 @@ app.use(
 
 // API Routes
 app.use('/api/auth', require('./routes/authRoutes'));
+app.use('/api/users', require('./routes/userRoutes'));
 
 // Route Not Found Handler
 app.use((req, res, next) => {

@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useLogout, useCreateStaff } from '../features/auth/hooks/useAuth';
+import { useUsersQuery, useToggleUserStatus, useDeleteUser, useChangeUserPassword } from '../features/users/hooks/useUsers';
 import { 
   Activity, 
   LogOut, 
@@ -17,12 +19,35 @@ import {
   Edit,
   Clipboard,
   CalendarDays,
-  UserCheck
+  UserCheck,
+  Trash2,
+  ToggleLeft,
+  ToggleRight,
+  Loader2,
+  Key
 } from 'lucide-react';
 
 export default function Dashboard({ user }) {
   const logoutMutation = useLogout();
   const createStaffMutation = useCreateStaff();
+  const queryClient = useQueryClient();
+
+  // Pagination State for Super Admin Staff Registry
+  const [limit, setLimit] = useState(5);
+  const [offset, setOffset] = useState(0);
+
+  // React Query: Fetch paginated users from server
+  const { data: usersResponse, isLoading: isUsersLoading, isError: isUsersError } = useUsersQuery({ limit, offset });
+  const toggleStatusMutation = useToggleUserStatus();
+  const deleteUserMutation = useDeleteUser();
+  const changePasswordMutation = useChangeUserPassword();
+
+  // Password reset inline states
+  const [activePasswordEditId, setActivePasswordEditId] = useState(null);
+  const [newPasswordVal, setNewPasswordVal] = useState('');
+
+  // Email auto-fill suggestion states
+  const [emailSuggestion, setEmailSuggestion] = useState('');
 
   // Role-specific initial tabs
   const getInitialTab = () => {
@@ -86,6 +111,67 @@ export default function Dashboard({ user }) {
   const currentDocId = user.email.includes('doctor') ? 1 : user.email.includes('cameron') ? 2 : 1;
 
   // Actions handlers
+  const handleToggleStatus = (id, currentStatus) => {
+    toggleStatusMutation.mutate({ id, isActive: currentStatus }, {
+      onError: (err) => {
+        alert(err.response?.data?.message || 'Failed to update status');
+      }
+    });
+  };
+
+  const handleDeleteUser = (id) => {
+    if (window.confirm('Are you sure you want to delete this staff account?')) {
+      deleteUserMutation.mutate(id, {
+        onError: (err) => {
+          alert(err.response?.data?.message || 'Failed to delete user');
+        }
+      });
+    }
+  };
+
+  const handleSavePassword = (id) => {
+    if (newPasswordVal.length < 6) {
+      alert('Password must be at least 6 characters long');
+      return;
+    }
+    changePasswordMutation.mutate({ id, password: newPasswordVal }, {
+      onSuccess: () => {
+        alert('Password updated successfully!');
+        setActivePasswordEditId(null);
+        setNewPasswordVal('');
+      },
+      onError: (err) => {
+        alert(err.response?.data?.message || 'Failed to update password');
+      }
+    });
+  };
+
+  const handleNameChange = (e) => {
+    const nameVal = e.target.value;
+    setStaffName(nameVal);
+
+    // Generate suggested email based on staff name
+    const parts = nameVal.toLowerCase().trim().split(/\s+/);
+    let suggestion = '';
+    if (parts.length > 0 && parts[0] !== '') {
+      // Remove title prefixes like 'dr', 'dr.', 'mr', etc. for clean emails
+      const cleanParts = parts.filter(p => p !== 'dr' && p !== 'dr.' && p !== 'mr' && p !== 'mrs' && p !== 'ms');
+      if (cleanParts.length > 0) {
+        suggestion = cleanParts.join('.') + '@emr.com';
+      }
+    }
+    setEmailSuggestion(suggestion);
+
+    // Auto-fill the email input if it's currently empty, OR matches a previous suggestion
+    const previousParts = staffName.toLowerCase().trim().split(/\s+/);
+    const cleanPrevParts = previousParts.filter(p => p !== 'dr' && p !== 'dr.' && p !== 'mr' && p !== 'mrs' && p !== 'ms');
+    const previousSuggestion = cleanPrevParts.length > 0 ? cleanPrevParts.join('.') + '@emr.com' : '';
+
+    if (suggestion && (!staffEmail || staffEmail === previousSuggestion)) {
+      setStaffEmail(suggestion);
+    }
+  };
+
   const handleCreateStaff = (e) => {
     e.preventDefault();
     setStaffMessage({ text: '', type: '' });
@@ -101,6 +187,9 @@ export default function Dashboard({ user }) {
         onSuccess: (res) => {
           setStaffMessage({ text: `Account created successfully for ${staffName} (${staffRole})`, type: 'success' });
           
+          // Invalidate users list query cache so it automatically refetches!
+          queryClient.invalidateQueries({ queryKey: ['users'] });
+
           if (staffRole === 'Doctor') {
             setDoctors([
               ...doctors,
@@ -294,12 +383,20 @@ export default function Dashboard({ user }) {
 
               <div className="form-group">
                 <label>Full Name</label>
-                <input type="text" className="form-input" style={{ paddingLeft: '1rem' }} placeholder="Dr. James Wilson" value={staffName} onChange={(e) => setStaffName(e.target.value)} required />
+                <input type="text" className="form-input" style={{ paddingLeft: '1rem' }} placeholder="Dr. James Wilson" value={staffName} onChange={handleNameChange} required />
               </div>
 
               <div className="form-group">
                 <label>Email Address</label>
                 <input type="email" className="form-input" style={{ paddingLeft: '1rem' }} placeholder="wilson@emr.com" value={staffEmail} onChange={(e) => setStaffEmail(e.target.value)} required />
+                {emailSuggestion && staffEmail !== emailSuggestion && (
+                  <span 
+                    onClick={() => setStaffEmail(emailSuggestion)}
+                    style={{ fontSize: '0.75rem', color: 'var(--primary)', cursor: 'pointer', display: 'block', marginTop: '0.25rem', textDecoration: 'underline' }}
+                  >
+                    Suggestion: {emailSuggestion} (click to apply)
+                  </span>
+                )}
               </div>
 
               <div className="form-group">
@@ -313,36 +410,202 @@ export default function Dashboard({ user }) {
             </form>
           </div>
 
-          {/* Active Staff List */}
-          <div className="glass-card">
+          {/* Active Staff List (Dynamic Server Registry with Pagination) */}
+          <div className="glass-card" style={{ flex: 1.5 }}>
             <h2 style={{ fontSize: '1.25rem', marginBottom: '1.25rem', fontFamily: 'var(--font-title)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <Users size={20} style={{ color: 'var(--primary)' }} />
               Active Staff Directory
             </h2>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <h3 style={{ fontSize: '0.95rem', color: 'var(--primary)', borderBottom: '1px solid var(--border-light)', paddingBottom: '0.25rem' }}>Doctors</h3>
-              {doctors.map(doc => (
-                <div key={doc.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-md)' }}>
-                  <div>
-                    <h4 style={{ fontWeight: 600, fontSize: '0.9rem' }}>{doc.name}</h4>
-                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.75rem' }}>{doc.email}</p>
-                  </div>
-                  <span className="badge badge-success" style={{ alignSelf: 'center' }}>{doc.department}</span>
-                </div>
-              ))}
+            {isUsersLoading ? (
+              <div className="loading-container" style={{ padding: '2rem' }}>
+                <Loader2 className="loading-spinner" size={24} style={{ animation: 'spin 1s linear infinite' }} />
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Loading registry...</p>
+              </div>
+            ) : isUsersError ? (
+              <div className="badge-error" style={{ padding: '1rem', borderRadius: 'var(--radius-md)' }}>
+                Failed to load staff list. Please verify server connectivity.
+              </div>
+            ) : (
+              <>
+                <div style={{ overflowX: 'auto', marginBottom: '1.5rem' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem', textAlign: 'left' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border-medium)', color: 'var(--text-secondary)' }}>
+                        <th style={{ padding: '0.5rem' }}>Name & Email</th>
+                        <th style={{ padding: '0.5rem' }}>Role</th>
+                        <th style={{ padding: '0.5rem' }}>Status</th>
+                        <th style={{ padding: '0.5rem', textAlign: 'right' }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {usersResponse.data?.users.map((u) => (
+                        <tr key={u._id} style={{ borderBottom: '1px solid var(--border-light)' }}>
+                          <td style={{ padding: '0.65rem 0.5rem' }}>
+                            <div style={{ fontWeight: 600 }}>{u.name}</div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{u.email}</div>
 
-              <h3 style={{ fontSize: '0.95rem', color: 'var(--primary)', borderBottom: '1px solid var(--border-light)', paddingBottom: '0.25rem', marginTop: '1rem' }}>Receptionists</h3>
-              {receptionists.map(rec => (
-                <div key={rec.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-md)' }}>
-                  <div>
-                    <h4 style={{ fontWeight: 600, fontSize: '0.9rem' }}>{rec.name}</h4>
-                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.75rem' }}>{rec.email}</p>
-                  </div>
-                  <span className="badge badge-warning" style={{ alignSelf: 'center' }}>Receptionist</span>
+                            {/* Password Reset Section */}
+                            {activePasswordEditId === u._id && (
+                              <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
+                                <input
+                                  type="password"
+                                  className="form-input"
+                                  style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem', width: '130px', height: '28px' }}
+                                  placeholder="New password"
+                                  value={newPasswordVal}
+                                  onChange={(e) => setNewPasswordVal(e.target.value)}
+                                  autoFocus
+                                />
+                                <button 
+                                  onClick={() => handleSavePassword(u._id)}
+                                  disabled={changePasswordMutation.isPending}
+                                  className="btn btn-primary"
+                                  style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem', height: '28px' }}
+                                >
+                                  Save
+                                </button>
+                                <button 
+                                  onClick={() => { setActivePasswordEditId(null); setNewPasswordVal(''); }}
+                                  className="btn btn-secondary"
+                                  style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem', height: '28px', border: 'none' }}
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            )}
+                          </td>
+                          <td style={{ padding: '0.65rem 0.5rem' }}>
+                            <span className={`badge ${u.role === 'Super Admin' ? 'badge-error' : u.role === 'Doctor' ? 'badge-success' : 'badge-warning'}`}>
+                              {u.role}
+                            </span>
+                          </td>
+                          <td style={{ padding: '0.65rem 0.5rem' }}>
+                            <button
+                              onClick={() => handleToggleStatus(u._id, !u.isActive)}
+                              disabled={u._id === user.id || toggleStatusMutation.isPending}
+                              className="btn btn-secondary"
+                              style={{ 
+                                padding: '0.2rem 0.4rem', 
+                                fontSize: '0.75rem', 
+                                display: 'inline-flex', 
+                                alignItems: 'center', 
+                                gap: '0.25rem',
+                                border: 'none',
+                                background: 'transparent',
+                                cursor: u._id === user.id ? 'not-allowed' : 'pointer'
+                              }}
+                              title={u._id === user.id ? "Cannot deactivate yourself" : `Click to ${u.isActive ? 'Deactivate' : 'Activate'}`}
+                            >
+                              {u.isActive ? (
+                                <>
+                                  <ToggleRight size={20} style={{ color: 'var(--success)' }} />
+                                  <span style={{ color: 'var(--success)' }}>Active</span>
+                                </>
+                              ) : (
+                                <>
+                                  <ToggleLeft size={20} style={{ color: 'var(--text-muted)' }} />
+                                  <span style={{ color: 'var(--text-muted)' }}>Inactive</span>
+                                </>
+                              )}
+                            </button>
+                          </td>
+                          <td style={{ padding: '0.65rem 0.5rem', textAlign: 'right' }}>
+                            <button
+                              onClick={() => {
+                                if (activePasswordEditId === u._id) {
+                                  setActivePasswordEditId(null);
+                                  setNewPasswordVal('');
+                                } else {
+                                  setActivePasswordEditId(u._id);
+                                  setNewPasswordVal('');
+                                }
+                              }}
+                              className="btn btn-secondary"
+                              style={{ 
+                                padding: '0.3rem', 
+                                marginRight: '0.25rem',
+                                border: '1px solid rgba(245, 158, 11, 0.2)'
+                              }}
+                              title="Change Password"
+                            >
+                              <Key size={14} style={{ color: 'var(--warning)' }} />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteUser(u._id)}
+                              disabled={u._id === user.id || deleteUserMutation.isPending}
+                              className="btn btn-secondary"
+                              style={{ 
+                                padding: '0.3rem', 
+                                border: '1px solid rgba(244, 63, 94, 0.2)',
+                                cursor: u._id === user.id ? 'not-allowed' : 'pointer',
+                                opacity: u._id === user.id ? 0.3 : 1
+                              }}
+                              title={u._id === user.id ? "Cannot delete yourself" : "Delete Account"}
+                            >
+                              <Trash2 size={14} style={{ color: 'var(--error)' }} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                      {usersResponse.data?.users.length === 0 && (
+                        <tr>
+                          <td colSpan={4} style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-muted)' }}>
+                            No users registered.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
                 </div>
-              ))}
-            </div>
+
+                {/* Pagination Switcher */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+                  {/* Page Size Select */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Show:</span>
+                    <select
+                      className="form-input"
+                      style={{ width: '70px', padding: '0.2rem 0.4rem', fontSize: '0.8rem' }}
+                      value={limit}
+                      onChange={(e) => {
+                        setLimit(parseInt(e.target.value, 10));
+                        setOffset(0); // Reset to page 1
+                      }}
+                    >
+                      <option value={5}>5</option>
+                      <option value={10}>10</option>
+                      <option value={20}>20</option>
+                    </select>
+                  </div>
+
+                  {/* Info text */}
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                    Showing {usersResponse.data?.totalCount === 0 ? 0 : offset + 1} to {Math.min(usersResponse.data?.totalCount || 0, offset + limit)} of {usersResponse.data?.totalCount || 0} entries
+                  </div>
+
+                  {/* Nav actions */}
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <button
+                      className="btn btn-secondary"
+                      style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem' }}
+                      disabled={offset === 0}
+                      onClick={() => setOffset(prev => Math.max(0, prev - limit))}
+                    >
+                      Previous
+                    </button>
+                    <button
+                      className="btn btn-secondary"
+                      style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem' }}
+                      disabled={offset + limit >= (usersResponse.data?.totalCount || 0)}
+                      onClick={() => setOffset(prev => prev + limit)}
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
       );
