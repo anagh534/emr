@@ -33,7 +33,7 @@ export function AppointmentScheduler() {
 
   // Autocomplete patient search query
   const { data: patientSearchResponse } = useSearchPatientsQuery(bookPatientSearch);
-  const patientSuggestions = patientSearchResponse?.data || [];
+  const patientSuggestions = patientSearchResponse?.data?.patients || [];
 
   // Query database doctors registry
   const { data: dbDoctorsResponse } = useUsersQuery({ limit: 100, role: 'Doctor', isActive: 'true' });
