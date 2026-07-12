@@ -9,15 +9,38 @@ const getUsers = async (req, res, next) => {
     try {
         const limit = parseInt(req.query.limit || '5', 10);
         const offset = parseInt(req.query.offset || '0', 10);
+        const { name, email, role, isActive } = req.query;
+
+        const query = {};
+
+        // Name Filter (Regex match on name)
+        if (name) {
+            query.name = { $regex: name, $options: 'i' };
+        }
+
+        // Email Filter (Regex match on email)
+        if (email) {
+            query.email = { $regex: email, $options: 'i' };
+        }
+
+        // Role Filter
+        if (role && role !== 'All') {
+            query.role = role;
+        }
+
+        // Active Status Filter
+        if (isActive !== undefined && isActive !== 'All') {
+            query.isActive = isActive === 'true';
+        }
 
         // Fetch users excluding password
-        const users = await User.find({})
+        const users = await User.find(query)
             .select('-password')
             .sort({ createdAt: -1 })
             .skip(offset)
             .limit(limit);
 
-        const totalCount = await User.countDocuments({});
+        const totalCount = await User.countDocuments(query);
 
         res.status(200).json({
             success: true,

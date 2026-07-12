@@ -5,12 +5,12 @@ import { api } from '../../../lib/axios';
  */
 export const userApi = {
   /**
-   * Fetch paginated list of clinic staff
-   * @param {Object} params - { limit, offset }
+   * Fetch paginated list of clinic staff with filters
+   * @param {Object} params - { limit, offset, role, isActive, name, email }
    */
-  getUsers: async ({ limit = 5, offset = 0 } = {}) => {
+  getUsers: async ({ limit = 5, offset = 0, role = 'All', isActive = 'All', name = '', email = '' } = {}) => {
     const response = await api.get('/users', {
-      params: { limit, offset },
+      params: { limit, offset, role, isActive, name, email },
     });
     return response.data;
   },

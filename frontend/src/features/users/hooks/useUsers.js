@@ -2,17 +2,17 @@ import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tansta
 import { userApi } from '../services/userApi';
 
 export const USER_KEYS = {
-  list: (limit, offset) => ['users', 'list', { limit, offset }],
+  list: (limit, offset, role, isActive, name, email) => ['users', 'list', { limit, offset, role, isActive, name, email }],
 };
 
 /**
- * Hook to retrieve a paginated list of users.
+ * Hook to retrieve a paginated list of users with applied filters.
  * Uses `keepPreviousData` to ensure page navigation is smooth without loading flickers.
  */
-export function useUsersQuery({ limit = 5, offset = 0 } = {}) {
+export function useUsersQuery({ limit = 5, offset = 0, role = 'All', isActive = 'All', name = '', email = '' } = {}) {
   return useQuery({
-    queryKey: USER_KEYS.list(limit, offset),
-    queryFn: () => userApi.getUsers({ limit, offset }),
+    queryKey: USER_KEYS.list(limit, offset, role, isActive, name, email),
+    queryFn: () => userApi.getUsers({ limit, offset, role, isActive, name, email }),
     placeholderData: keepPreviousData, // React Query v5 pagination standard
     staleTime: 1000 * 60 * 2, // 2 minutes stale time
   });

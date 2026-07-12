@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useLogout, useCreateStaff } from '../features/auth/hooks/useAuth';
 import { useUsersQuery, useToggleUserStatus, useDeleteUser, useChangeUserPassword } from '../features/users/hooks/useUsers';
+import { userApi } from '../features/users/services/userApi';
 import { 
   Activity, 
   LogOut, 
@@ -36,8 +37,37 @@ export default function Dashboard({ user }) {
   const [limit, setLimit] = useState(5);
   const [offset, setOffset] = useState(0);
 
-  // React Query: Fetch paginated users from server
-  const { data: usersResponse, isLoading: isUsersLoading, isError: isUsersError } = useUsersQuery({ limit, offset });
+  // Toast notifications state
+  const [toasts, setToasts] = useState([]);
+  const addToast = (message, type = 'success') => {
+    const id = Date.now();
+    setToasts((prev) => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 4000);
+  };
+
+  // Local filter states for Super Admin directory (Separate Name and Email search)
+  const [searchNameVal, setSearchNameVal] = useState('');
+  const [searchEmailVal, setSearchEmailVal] = useState('');
+  const [roleVal, setRoleVal] = useState('All');
+  const [statusVal, setStatusVal] = useState('All');
+
+  // Applied filter states passed into the React Query hook
+  const [appliedSearchName, setAppliedSearchName] = useState('');
+  const [appliedSearchEmail, setAppliedSearchEmail] = useState('');
+  const [appliedRole, setAppliedRole] = useState('All');
+  const [appliedStatus, setAppliedStatus] = useState('All');
+
+  // React Query: Fetch paginated users from server with applied filters
+  const { data: usersResponse, isLoading: isUsersLoading, isError: isUsersError } = useUsersQuery({ 
+    limit, 
+    offset,
+    role: appliedRole,
+    isActive: appliedStatus,
+    name: appliedSearchName,
+    email: appliedSearchEmail
+  });
   const toggleStatusMutation = useToggleUserStatus();
   const deleteUserMutation = useDeleteUser();
   const changePasswordMutation = useChangeUserPassword();
@@ -48,6 +78,42 @@ export default function Dashboard({ user }) {
 
   // Email auto-fill suggestion states
   const [emailSuggestion, setEmailSuggestion] = useState('');
+
+  // Create Staff Modal Visibility State
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+
+  // Search autocomplete / suggestion states (Name & Email)
+  const [nameSuggestions, setNameSuggestions] = useState([]);
+  const [showNameSuggestions, setShowNameSuggestions] = useState(false);
+  const [emailSuggestions, setEmailSuggestions] = useState([]);
+  const [showEmailSuggestions, setShowEmailSuggestions] = useState(false);
+
+  const nameSearchTimeoutRef = useRef(null);
+  const emailSearchTimeoutRef = useRef(null);
+
+  // Click outside to dismiss search suggestions dropdowns
+  useEffect(() => {
+    const handleClickOutside = () => {
+      setShowNameSuggestions(false);
+      setShowEmailSuggestions(false);
+    };
+    document.addEventListener('click', handleClickOutside);
+    return () => {
+      document.removeEventListener('click', handleClickOutside);
+    };
+  }, []);
+
+  // Cleanup autocomplete search timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (nameSearchTimeoutRef.current) {
+        clearTimeout(nameSearchTimeoutRef.current);
+      }
+      if (emailSearchTimeoutRef.current) {
+        clearTimeout(emailSearchTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Role-specific initial tabs
   const getInitialTab = () => {
@@ -113,8 +179,11 @@ export default function Dashboard({ user }) {
   // Actions handlers
   const handleToggleStatus = (id, currentStatus) => {
     toggleStatusMutation.mutate({ id, isActive: currentStatus }, {
+      onSuccess: () => {
+        addToast('Staff status updated successfully!', 'success');
+      },
       onError: (err) => {
-        alert(err.response?.data?.message || 'Failed to update status');
+        addToast(err.response?.data?.message || 'Failed to update status', 'error');
       }
     });
   };
@@ -122,8 +191,11 @@ export default function Dashboard({ user }) {
   const handleDeleteUser = (id) => {
     if (window.confirm('Are you sure you want to delete this staff account?')) {
       deleteUserMutation.mutate(id, {
+        onSuccess: () => {
+          addToast('Staff account removed successfully', 'success');
+        },
         onError: (err) => {
-          alert(err.response?.data?.message || 'Failed to delete user');
+          addToast(err.response?.data?.message || 'Failed to delete user', 'error');
         }
       });
     }
@@ -131,19 +203,95 @@ export default function Dashboard({ user }) {
 
   const handleSavePassword = (id) => {
     if (newPasswordVal.length < 6) {
-      alert('Password must be at least 6 characters long');
+      addToast('Password must be at least 6 characters long', 'error');
       return;
     }
     changePasswordMutation.mutate({ id, password: newPasswordVal }, {
       onSuccess: () => {
-        alert('Password updated successfully!');
+        addToast('Password updated successfully!', 'success');
         setActivePasswordEditId(null);
         setNewPasswordVal('');
       },
       onError: (err) => {
-        alert(err.response?.data?.message || 'Failed to update password');
+        addToast(err.response?.data?.message || 'Failed to update password', 'error');
       }
     });
+  };
+
+  const handleApplyFilters = () => {
+    setAppliedSearchName(searchNameVal);
+    setAppliedSearchEmail(searchEmailVal);
+    setAppliedRole(roleVal);
+    setAppliedStatus(statusVal);
+    setOffset(0); // Reset page to 1
+  };
+
+  const handleResetFilters = () => {
+    setSearchNameVal('');
+    setSearchEmailVal('');
+    setRoleVal('All');
+    setStatusVal('All');
+    setAppliedSearchName('');
+    setAppliedSearchEmail('');
+    setAppliedRole('All');
+    setAppliedStatus('All');
+    setOffset(0);
+  };
+
+  const handleNameSearchChange = (e) => {
+    const val = e.target.value;
+    setSearchNameVal(val);
+
+    if (nameSearchTimeoutRef.current) {
+      clearTimeout(nameSearchTimeoutRef.current);
+    }
+
+    if (val.trim() === '') {
+      setNameSuggestions([]);
+      setShowNameSuggestions(false);
+      return;
+    }
+
+    // Set up debounced API fetch for name suggestions
+    nameSearchTimeoutRef.current = setTimeout(async () => {
+      try {
+        const res = await userApi.getUsers({ name: val, limit: 3 });
+        if (res.success && res.data.users) {
+          setNameSuggestions(res.data.users);
+          setShowNameSuggestions(true);
+        }
+      } catch (err) {
+        console.error('Error fetching name suggestions:', err);
+      }
+    }, 300); // 300ms debounce
+  };
+
+  const handleEmailSearchChange = (e) => {
+    const val = e.target.value;
+    setSearchEmailVal(val);
+
+    if (emailSearchTimeoutRef.current) {
+      clearTimeout(emailSearchTimeoutRef.current);
+    }
+
+    if (val.trim() === '') {
+      setEmailSuggestions([]);
+      setShowEmailSuggestions(false);
+      return;
+    }
+
+    // Set up debounced API fetch for email suggestions
+    emailSearchTimeoutRef.current = setTimeout(async () => {
+      try {
+        const res = await userApi.getUsers({ email: val, limit: 3 });
+        if (res.success && res.data.users) {
+          setEmailSuggestions(res.data.users);
+          setShowEmailSuggestions(true);
+        }
+      } catch (err) {
+        console.error('Error fetching email suggestions:', err);
+      }
+    }, 300); // 300ms debounce
   };
 
   const handleNameChange = (e) => {
@@ -174,10 +322,9 @@ export default function Dashboard({ user }) {
 
   const handleCreateStaff = (e) => {
     e.preventDefault();
-    setStaffMessage({ text: '', type: '' });
 
     if (!staffName || !staffEmail || !staffPassword) {
-      setStaffMessage({ text: 'Please fill in all staff fields', type: 'error' });
+      addToast('Please fill in all staff fields', 'error');
       return;
     }
 
@@ -185,7 +332,7 @@ export default function Dashboard({ user }) {
       { name: staffName, email: staffEmail, password: staffPassword, role: staffRole },
       {
         onSuccess: (res) => {
-          setStaffMessage({ text: `Account created successfully for ${staffName} (${staffRole})`, type: 'success' });
+          addToast(`Account created successfully for ${staffName} (${staffRole})`, 'success');
           
           // Invalidate users list query cache so it automatically refetches!
           queryClient.invalidateQueries({ queryKey: ['users'] });
@@ -206,10 +353,12 @@ export default function Dashboard({ user }) {
           setStaffName('');
           setStaffEmail('');
           setStaffPassword('');
+          setEmailSuggestion('');
+          setIsCreateModalOpen(false); // Close popup modal on success
         },
         onError: (err) => {
           const msg = err.response?.data?.message || 'Error creating staff. Email may already exist.';
-          setStaffMessage({ text: msg, type: 'error' });
+          addToast(msg, 'error');
         }
       }
     );
@@ -346,76 +495,186 @@ export default function Dashboard({ user }) {
 
     if (activeTab === 'staff') {
       return (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '1.5rem' }}>
-          {/* Create Staff Form */}
-          <div className="glass-card">
-            <h2 style={{ fontSize: '1.25rem', marginBottom: '1.25rem', fontFamily: 'var(--font-title)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <UserPlus size={20} style={{ color: 'var(--primary)' }} />
-              Create Clinical Staff Accounts
-            </h2>
+        <div style={{ width: '100%' }}>
 
-            {staffMessage.text && (
-              <div className={staffMessage.type === 'success' ? 'badge-success' : 'badge-error'} style={{ padding: '0.75rem', borderRadius: 'var(--radius-md)', marginBottom: '1.25rem', fontSize: '0.875rem', width: '100%' }}>
-                {staffMessage.text}
-              </div>
-            )}
+          {/* Active Staff List (Dynamic Server Registry with Pagination) */}
+          <div className="glass-card" style={{ width: '100%' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+              <h2 style={{ fontSize: '1.25rem', fontFamily: 'var(--font-title)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Users size={20} style={{ color: 'var(--primary)' }} />
+                Active Staff Directory
+              </h2>
+              <button 
+                onClick={() => setIsCreateModalOpen(true)}
+                className="btn btn-primary"
+                style={{ padding: '0.5rem 1rem', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+              >
+                <UserPlus size={16} />
+                Create Staff Account
+              </button>
+            </div>
 
-            <form onSubmit={handleCreateStaff}>
-              <div className="form-group">
-                <label>Staff Role</label>
-                <select className="form-input" style={{ paddingLeft: '1rem' }} value={staffRole} onChange={(e) => setStaffRole(e.target.value)}>
-                  <option value="Doctor">Doctor (Clinical Access)</option>
-                  <option value="Receptionist">Receptionist (Administrative Access)</option>
-                </select>
-              </div>
-
-              {staffRole === 'Doctor' && (
-                <div className="form-group">
-                  <label>Department</label>
-                  <select className="form-input" style={{ paddingLeft: '1rem' }} value={staffDepartment} onChange={(e) => setStaffDepartment(e.target.value)}>
-                    <option value="Diagnostic Medicine">Diagnostic Medicine</option>
-                    <option value="Immunology">Immunology</option>
-                    <option value="Cardiology">Cardiology</option>
-                    <option value="Pediatrics">Pediatrics</option>
-                  </select>
-                </div>
-              )}
-
-              <div className="form-group">
-                <label>Full Name</label>
-                <input type="text" className="form-input" style={{ paddingLeft: '1rem' }} placeholder="Dr. James Wilson" value={staffName} onChange={handleNameChange} required />
-              </div>
-
-              <div className="form-group">
-                <label>Email Address</label>
-                <input type="email" className="form-input" style={{ paddingLeft: '1rem' }} placeholder="wilson@emr.com" value={staffEmail} onChange={(e) => setStaffEmail(e.target.value)} required />
-                {emailSuggestion && staffEmail !== emailSuggestion && (
-                  <span 
-                    onClick={() => setStaffEmail(emailSuggestion)}
-                    style={{ fontSize: '0.75rem', color: 'var(--primary)', cursor: 'pointer', display: 'block', marginTop: '0.25rem', textDecoration: 'underline' }}
-                  >
-                    Suggestion: {emailSuggestion} (click to apply)
+            {/* Manual Filter Controls (Separate Name and Email Search) */}
+            <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1.5rem', padding: '1rem', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-md)', alignItems: 'flex-end' }}>
+              
+              {/* Search Name Input with debounced suggestions */}
+              <div style={{ flex: '1', minWidth: '180px', position: 'relative' }}>
+                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>Search Name</label>
+                <div className="input-wrapper" onClick={(e) => e.stopPropagation()}>
+                  <span className="input-icon" style={{ left: '0.75rem' }}>
+                    <Search size={14} />
                   </span>
+                  <input 
+                    type="text" 
+                    className="form-input" 
+                    style={{ padding: '0.35rem 0.75rem 0.35rem 2rem', fontSize: '0.85rem' }} 
+                    placeholder="Name..." 
+                    value={searchNameVal}
+                    onChange={handleNameSearchChange}
+                  />
+                </div>
+                {showNameSuggestions && nameSuggestions.length > 0 && (
+                  <ul 
+                    style={{ 
+                      position: 'absolute', 
+                      top: '100%', 
+                      left: 0, 
+                      width: '100%', 
+                      backgroundColor: '#111827', 
+                      border: '1px solid var(--border-medium)', 
+                      borderRadius: 'var(--radius-md)', 
+                      zIndex: 50, 
+                      maxHeight: '130px', 
+                      overflowY: 'auto',
+                      listStyle: 'none',
+                      margin: '0.25rem 0 0 0',
+                      padding: '0.15rem 0',
+                      boxShadow: 'var(--shadow-lg)'
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {nameSuggestions.map(s => (
+                      <li 
+                        key={s._id}
+                        onClick={() => {
+                          setSearchNameVal(s.name);
+                          setAppliedSearchName(s.name);
+                          setOffset(0);
+                          setShowNameSuggestions(false);
+                        }}
+                        style={{ 
+                          padding: '0.35rem 0.65rem', 
+                          cursor: 'pointer', 
+                          borderBottom: '1px solid rgba(255,255,255,0.02)',
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                      >
+                        <span style={{ fontWeight: 600, fontSize: '0.775rem', color: 'var(--text-main)' }}>{s.name} <span style={{ fontSize: '0.675rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>({s.role})</span></span>
+                      </li>
+                    ))}
+                  </ul>
                 )}
               </div>
 
-              <div className="form-group">
-                <label>Security Password</label>
-                <input type="password" className="form-input" style={{ paddingLeft: '1rem' }} placeholder="••••••••" value={staffPassword} onChange={(e) => setStaffPassword(e.target.value)} required />
+              {/* Search Email Input with debounced suggestions */}
+              <div style={{ flex: '1', minWidth: '180px', position: 'relative' }}>
+                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>Search Email</label>
+                <div className="input-wrapper" onClick={(e) => e.stopPropagation()}>
+                  <span className="input-icon" style={{ left: '0.75rem' }}>
+                    <Search size={14} />
+                  </span>
+                  <input 
+                    type="text" 
+                    className="form-input" 
+                    style={{ padding: '0.35rem 0.75rem 0.35rem 2rem', fontSize: '0.85rem' }} 
+                    placeholder="Email..." 
+                    value={searchEmailVal}
+                    onChange={handleEmailSearchChange}
+                  />
+                </div>
+                {showEmailSuggestions && emailSuggestions.length > 0 && (
+                  <ul 
+                    style={{ 
+                      position: 'absolute', 
+                      top: '100%', 
+                      left: 0, 
+                      width: '100%', 
+                      backgroundColor: '#111827', 
+                      border: '1px solid var(--border-medium)', 
+                      borderRadius: 'var(--radius-md)', 
+                      zIndex: 50, 
+                      maxHeight: '130px', 
+                      overflowY: 'auto',
+                      listStyle: 'none',
+                      margin: '0.25rem 0 0 0',
+                      padding: '0.15rem 0',
+                      boxShadow: 'var(--shadow-lg)'
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {emailSuggestions.map(s => (
+                      <li 
+                        key={s._id}
+                        onClick={() => {
+                          setSearchEmailVal(s.email);
+                          setAppliedSearchEmail(s.email);
+                          setOffset(0);
+                          setShowEmailSuggestions(false);
+                        }}
+                        style={{ 
+                          padding: '0.35rem 0.65rem', 
+                          cursor: 'pointer', 
+                          borderBottom: '1px solid rgba(255,255,255,0.02)',
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                      >
+                        <span style={{ fontWeight: 600, fontSize: '0.775rem', color: 'var(--text-main)' }}>{s.email} <span style={{ fontSize: '0.675rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>({s.role})</span></span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
 
-              <button type="submit" className="btn btn-primary btn-block" disabled={createStaffMutation.isPending} style={{ marginTop: '1rem' }}>
-                {createStaffMutation.isPending ? 'Registering Staff...' : 'Create Account'}
-              </button>
-            </form>
-          </div>
+              <div style={{ width: '130px' }}>
+                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>Role</label>
+                <select 
+                  className="form-input" 
+                  style={{ padding: '0.35rem 0.75rem', fontSize: '0.85rem' }}
+                  value={roleVal}
+                  onChange={(e) => setRoleVal(e.target.value)}
+                >
+                  <option value="All">All Roles</option>
+                  <option value="Super Admin">Super Admin</option>
+                  <option value="Doctor">Doctor</option>
+                  <option value="Receptionist">Receptionist</option>
+                </select>
+              </div>
 
-          {/* Active Staff List (Dynamic Server Registry with Pagination) */}
-          <div className="glass-card" style={{ flex: 1.5 }}>
-            <h2 style={{ fontSize: '1.25rem', marginBottom: '1.25rem', fontFamily: 'var(--font-title)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Users size={20} style={{ color: 'var(--primary)' }} />
-              Active Staff Directory
-            </h2>
+              <div style={{ width: '110px' }}>
+                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>Status</label>
+                <select 
+                  className="form-input" 
+                  style={{ padding: '0.35rem 0.75rem', fontSize: '0.85rem' }}
+                  value={statusVal}
+                  onChange={(e) => setStatusVal(e.target.value)}
+                >
+                  <option value="All">All Statuses</option>
+                  <option value="true">Active</option>
+                  <option value="false">Inactive</option>
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button onClick={handleApplyFilters} className="btn btn-primary" style={{ padding: '0.45rem 1rem', fontSize: '0.85rem', height: '36px' }}>
+                  Filter
+                </button>
+                <button onClick={handleResetFilters} className="btn btn-secondary" style={{ padding: '0.45rem 1rem', fontSize: '0.85rem', height: '36px', border: 'none' }}>
+                  Reset
+                </button>
+              </div>
+            </div>
 
             {isUsersLoading ? (
               <div className="loading-container" style={{ padding: '2rem' }}>
@@ -1231,6 +1490,110 @@ export default function Dashboard({ user }) {
         {user.role === 'Receptionist' && renderReceptionistTab()}
         {user.role === 'Doctor' && renderDoctorTab()}
       </main>
+
+      {/* Create Staff Modal Backdrop Overlay */}
+      {isCreateModalOpen && (
+        <div style={{ 
+          position: 'fixed', 
+          top: 0, 
+          left: 0, 
+          width: '100vw', 
+          height: '100vh', 
+          backgroundColor: 'rgba(2, 6, 23, 0.75)', 
+          backdropFilter: 'blur(4px)',
+          zIndex: 5000, 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center',
+          padding: '1rem'
+        }}>
+          <div className="glass-card auth-card" style={{ maxWidth: '460px', margin: 0, padding: '2rem', animation: 'slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+              <h2 style={{ fontSize: '1.25rem', fontFamily: 'var(--font-title)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <UserPlus size={20} style={{ color: 'var(--primary)' }} />
+                Create Staff Account
+              </h2>
+              <button 
+                onClick={() => { setIsCreateModalOpen(false); setEmailSuggestion(''); }}
+                style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '1.5rem', padding: '0.25rem', lineHeight: '1' }}
+              >
+                &times;
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateStaff}>
+              <div className="form-group">
+                <label>Staff Role</label>
+                <select className="form-input" style={{ paddingLeft: '1rem' }} value={staffRole} onChange={(e) => setStaffRole(e.target.value)}>
+                  <option value="Doctor">Doctor (Clinical Access)</option>
+                  <option value="Receptionist">Receptionist (Administrative Access)</option>
+                </select>
+              </div>
+
+              {staffRole === 'Doctor' && (
+                <div className="form-group">
+                  <label>Department</label>
+                  <select className="form-input" style={{ paddingLeft: '1rem' }} value={staffDepartment} onChange={(e) => setStaffDepartment(e.target.value)}>
+                    <option value="Diagnostic Medicine">Diagnostic Medicine</option>
+                    <option value="Immunology">Immunology</option>
+                    <option value="Cardiology">Cardiology</option>
+                    <option value="Pediatrics">Pediatrics</option>
+                  </select>
+                </div>
+              )}
+
+              <div className="form-group">
+                <label>Full Name</label>
+                <input type="text" className="form-input" style={{ paddingLeft: '1rem' }} placeholder="Dr. James Wilson" value={staffName} onChange={handleNameChange} required />
+              </div>
+
+              <div className="form-group">
+                <label>Email Address</label>
+                <input type="email" className="form-input" style={{ paddingLeft: '1rem' }} placeholder="wilson@emr.com" value={staffEmail} onChange={(e) => setStaffEmail(e.target.value)} required />
+                {emailSuggestion && staffEmail !== emailSuggestion && (
+                  <span 
+                    onClick={() => setStaffEmail(emailSuggestion)}
+                    style={{ fontSize: '0.75rem', color: 'var(--primary)', cursor: 'pointer', display: 'block', marginTop: '0.25rem', textDecoration: 'underline' }}
+                  >
+                    Suggestion: {emailSuggestion} (click to apply)
+                  </span>
+                )}
+              </div>
+
+              <div className="form-group">
+                <label>Security Password</label>
+                <input type="password" className="form-input" style={{ paddingLeft: '1rem' }} placeholder="••••••••" value={staffPassword} onChange={(e) => setStaffPassword(e.target.value)} required />
+              </div>
+
+              <button type="submit" className="btn btn-primary btn-block" disabled={createStaffMutation.isPending} style={{ marginTop: '1.5rem' }}>
+                {createStaffMutation.isPending ? 'Registering Staff...' : 'Create Account'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Toast Notifications Portal Container */}
+      <div style={{ position: 'fixed', bottom: '2rem', right: '2rem', display: 'flex', flexDirection: 'column', gap: '0.75rem', zIndex: 9999 }}>
+        {toasts.map((toast) => (
+          <div 
+            key={toast.id} 
+            className={`glass-card ${toast.type === 'success' ? 'badge-success' : 'badge-error'}`}
+            style={{ 
+              padding: '0.75rem 1.25rem', 
+              borderRadius: 'var(--radius-md)', 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '0.5rem',
+              fontSize: '0.875rem',
+              boxShadow: 'var(--shadow-lg)',
+              animation: 'slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
+            }}
+          >
+            <span>{toast.message}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
