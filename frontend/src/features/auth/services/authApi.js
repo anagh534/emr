@@ -38,4 +38,13 @@ export const authApi = {
     const response = await api.get('/auth/me');
     return response.data;
   },
+
+  /**
+   * Update password for the currently logged-in user
+   * @param {Object} data - { currentPassword, newPassword }
+   */
+  updatePassword: async (data) => {
+    const response = await api.patch('/auth/update-password', data);
+    return response.data;
+  },
 };

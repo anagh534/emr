@@ -5,7 +5,8 @@ const {
     login,
     refresh,
     logout,
-    getMe
+    getMe,
+    updatePassword
 } = require('../controllers/authController');
 const { protect } = require('../middleware/authMiddleware');
 const { checkAnyPermission, PERMISSIONS } = require('../middleware/rbacMiddleware');
@@ -17,5 +18,6 @@ router.post('/login', validateLogin, login);
 router.post('/refresh', refresh);
 router.post('/logout', logout);
 router.get('/me', protect, getMe);
+router.patch('/update-password', protect, updatePassword);
 
 module.exports = router;

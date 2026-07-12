@@ -118,3 +118,12 @@ export function useCreateStaff() {
     mutationFn: (staffData) => authApi.register(staffData),
   });
 }
+
+/**
+ * Hook to update currently logged-in user password.
+ */
+export function useUpdateSelfPassword() {
+  return useMutation({
+    mutationFn: (passwordData) => authApi.updatePassword(passwordData),
+  });
+}

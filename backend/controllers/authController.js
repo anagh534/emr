@@ -288,10 +288,66 @@ const getMe = async (req, res, next) => {
     }
 };
 
+/**
+ * Update current logged-in user password
+ * PATCH /api/auth/update-password
+ */
+const updatePassword = async (req, res, next) => {
+    try {
+        const { currentPassword, newPassword } = req.body;
+
+        if (!currentPassword || !newPassword) {
+            return res.status(400).json({
+                success: false,
+                message: 'Please provide both current and new passwords'
+            });
+        }
+
+        if (newPassword.length < 6) {
+            return res.status(400).json({
+                success: false,
+                message: 'New password must be at least 6 characters long'
+            });
+        }
+
+        // Fetch user with password field included
+        const user = await User.findById(req.user._id).select('+password');
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found'
+            });
+        }
+
+        // Check if current password matches
+        const isMatch = await user.comparePassword(currentPassword);
+        if (!isMatch) {
+            return res.status(401).json({
+                success: false,
+                message: 'Incorrect current password'
+            });
+        }
+
+        // Update password
+        user.password = newPassword;
+        await user.save();
+
+        logger.info(`Password changed successfully for user: ${user.email}`);
+
+        res.status(200).json({
+            success: true,
+            message: 'Password updated successfully'
+        });
+    } catch (err) {
+        next(err);
+    }
+};
+
 module.exports = {
     register,
     login,
     refresh,
     logout,
-    getMe
+    getMe,
+    updatePassword
 };

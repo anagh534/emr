@@ -10,6 +10,7 @@ import { AppointmentScheduler } from '../features/appointments/components/Appoin
 import { AppointmentsRegistry } from '../features/appointments/components/AppointmentsRegistry';
 import { DoctorAppointmentsQueue } from '../features/appointments/components/DoctorAppointmentsQueue';
 import { DoctorConsultations } from '../features/appointments/components/DoctorConsultations';
+import { ProfileSettings } from '../components/ProfileSettings';
 
 import { 
   Activity, 
@@ -312,9 +313,15 @@ export default function Dashboard({ user }) {
         </div>
 
         {/* Active Tab Router */}
-        {user.role === 'Super Admin' && renderSuperAdminTab()}
-        {user.role === 'Receptionist' && renderReceptionistTab()}
-        {user.role === 'Doctor' && renderDoctorTab()}
+        {activeTab === 'profile' ? (
+          <ProfileSettings user={user} />
+        ) : (
+          <>
+            {user.role === 'Super Admin' && renderSuperAdminTab()}
+            {user.role === 'Receptionist' && renderReceptionistTab()}
+            {user.role === 'Doctor' && renderDoctorTab()}
+          </>
+        )}
       </main>
     </div>
   );

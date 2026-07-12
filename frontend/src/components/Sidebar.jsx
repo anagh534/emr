@@ -6,7 +6,8 @@ import {
   Calendar, 
   Users, 
   Clipboard, 
-  LogOut 
+  LogOut,
+  User
 } from 'lucide-react';
 
 /**
@@ -29,6 +30,16 @@ export function Sidebar({ user, activeTab, setActiveTab, onLogout }) {
             >
               <Activity size={18} />
               Overview
+            </button>
+          </li>
+
+          <li>
+            <button 
+              onClick={() => setActiveTab('profile')} 
+              className={`nav-link btn-block ${activeTab === 'profile' ? 'active' : ''}`}
+            >
+              <User size={18} />
+              Profile Settings
             </button>
           </li>
 
