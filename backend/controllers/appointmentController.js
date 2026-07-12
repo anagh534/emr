@@ -291,7 +291,15 @@ const updateAppointment = async (req, res, next) => {
         // Enforce Workflow Transitions:
         // Scheduled -> Arrived -> Completed
         // Cancelled and Completed are terminal
-        if (status) {
+        // Enforce Workflow Transitions:
+        // Scheduled -> Arrived -> Completed
+        // Cancelled and Completed are terminal
+        let targetStatus = status;
+        if (notes && notes.trim() !== '' && appointment.status !== 'Completed' && appointment.status !== 'Cancelled') {
+            targetStatus = 'Completed';
+        }
+
+        if (targetStatus) {
             const current = appointment.status;
 
             if (current === 'Completed') {
@@ -308,14 +316,16 @@ const updateAppointment = async (req, res, next) => {
                 });
             }
 
-            if (status === 'Completed' && current !== 'Arrived') {
+            // Only enforce Arrived -> Completed requirement if it is a manual status change (not triggered by notes)
+            const isAutoCompletedByNotes = notes && notes.trim() !== '' && targetStatus === 'Completed';
+            if (targetStatus === 'Completed' && current !== 'Arrived' && !isAutoCompletedByNotes) {
                 return res.status(400).json({
                     success: false,
                     message: 'Patient must be marked as Arrived before marking appointment as Completed'
                 });
             }
 
-            appointment.status = status;
+            appointment.status = targetStatus;
         }
 
         if (purpose) appointment.purpose = purpose;
