@@ -203,7 +203,7 @@ export function StaffRegistry({ currentUser }) {
     }
 
     createStaffMutation.mutate(
-      { name: staffName, email: staffEmail, password: staffPassword, role: staffRole },
+      { name: staffName, email: staffEmail, password: staffPassword, role: staffRole, department: staffRole === 'Doctor' ? staffDepartment : undefined },
       {
         onSuccess: () => {
           addToast(`Account created successfully for ${staffName} (${staffRole})`, 'success');

@@ -36,7 +36,7 @@ export function AppointmentScheduler() {
   const patientSuggestions = patientSearchResponse?.data || [];
 
   // Query database doctors registry
-  const { data: dbDoctorsResponse } = useUsersQuery({ limit: 100, role: 'Doctor' });
+  const { data: dbDoctorsResponse } = useUsersQuery({ limit: 100, role: 'Doctor', isActive: 'true' });
   const dbDoctors = dbDoctorsResponse?.data?.users || [];
 
   // Query booked slots for the selected doctor on the selected date to filter shift grid
@@ -304,21 +304,21 @@ export function AppointmentScheduler() {
               <h4 style={{ fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.75rem', color: 'var(--primary)' }}>Register New Patient Record</h4>
               <div className="form-group">
                 <label>Patient Full Name</label>
-                <input type="text" className="form-input" placeholder="Elizabeth Bennet" value={newPatName} onChange={(e) => setNewPatName(e.target.value)} required />
+                <input type="text" className="form-input" placeholder="Enter patient full name" value={newPatName} onChange={(e) => setNewPatName(e.target.value)} required />
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
                 <div className="form-group">
                   <label>Mobile Number</label>
-                  <input type="text" className="form-input" placeholder="9876543210" value={newPatMobile} onChange={(e) => setNewPatMobile(e.target.value)} required />
+                  <input type="text" className="form-input" placeholder="Enter mobile number" value={newPatMobile} onChange={(e) => setNewPatMobile(e.target.value)} required />
                 </div>
                 <div className="form-group">
                   <label>Age</label>
-                  <input type="number" className="form-input" placeholder="34" value={newPatAge} onChange={(e) => setNewPatAge(e.target.value)} required />
+                  <input type="number" className="form-input" placeholder="Enter age" value={newPatAge} onChange={(e) => setNewPatAge(e.target.value)} required />
                 </div>
               </div>
               <div className="form-group">
                 <label>Medical History Summary (Optional)</label>
-                <input type="text" className="form-input" placeholder="Mild Asthma, Penicillin allergy..." value={newPatHistory} onChange={(e) => setNewPatHistory(e.target.value)} />
+                <input type="text" className="form-input" placeholder="Enter medical history summary (optional)" value={newPatHistory} onChange={(e) => setNewPatHistory(e.target.value)} />
               </div>
             </div>
           )}
@@ -355,12 +355,12 @@ export function AppointmentScheduler() {
 
           <div className="form-group">
             <label>Reason for Visit (Purpose)</label>
-            <input type="text" className="form-input" style={{ paddingLeft: '1rem' }} placeholder="Chronic cough review" value={bookPurpose} onChange={(e) => setBookPurpose(e.target.value)} required />
+            <input type="text" className="form-input" style={{ paddingLeft: '1rem' }} placeholder="Enter reason for visit" value={bookPurpose} onChange={(e) => setBookPurpose(e.target.value)} required />
           </div>
 
           <div className="form-group">
             <label>Internal Consultation Notes (Optional)</label>
-            <textarea className="form-input" style={{ padding: '0.5rem 1rem', minHeight: '50px' }} placeholder="Notes for consulting clinical doctor..." value={bookNotes} onChange={(e) => setBookNotes(e.target.value)} />
+            <textarea className="form-input" style={{ padding: '0.5rem 1rem', minHeight: '50px' }} placeholder="Enter internal consultation notes (optional)" value={bookNotes} onChange={(e) => setBookNotes(e.target.value)} />
           </div>
 
           <button type="submit" disabled={createAppointmentMutation.isPending} className="btn btn-primary btn-block" style={{ marginTop: '1rem' }}>

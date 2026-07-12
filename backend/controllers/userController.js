@@ -188,7 +188,7 @@ const changePassword = async (req, res, next) => {
 const updateSchedule = async (req, res, next) => {
     try {
         const { id } = req.params;
-        const { workingDays, slotDuration, sessions, breaks } = req.body;
+        const { workingDays, slotDuration, sessions, breaks, department } = req.body;
 
         const user = await User.findById(id);
         if (!user) {
@@ -207,6 +207,7 @@ const updateSchedule = async (req, res, next) => {
 
         // Apply new values or fallback to existing values
         user.schedule = {
+            department: department || user.schedule.department,
             workingDays: workingDays || user.schedule.workingDays,
             slotDuration: slotDuration || user.schedule.slotDuration,
             sessions: sessions || user.schedule.sessions,

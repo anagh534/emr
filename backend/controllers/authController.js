@@ -13,7 +13,7 @@ const logger = require('../utils/logger');
  */
 const register = async (req, res, next) => {
     try {
-        const { name, email, password, role } = req.body;
+        const { name, email, password, role, department } = req.body;
 
         // Simple validation
         if (!name || !email || !password || !role) {
@@ -42,12 +42,14 @@ const register = async (req, res, next) => {
         }
 
         // Create user
-        const user = await User.create({
-            name,
-            email,
-            password,
-            role
-        });
+        const userPayload = { name, email, password, role };
+        if (role === 'Doctor' && department) {
+            userPayload.schedule = {
+                department
+            };
+        }
+
+        const user = await User.create(userPayload);
 
         // Generate tokens
         const accessToken = generateAccessToken(user);

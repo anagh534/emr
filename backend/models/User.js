@@ -37,6 +37,10 @@ const userSchema = new mongoose.Schema({
         default: true
     },
     schedule: {
+        department: {
+            type: String,
+            default: 'Diagnostic Medicine'
+        },
         workingDays: {
             type: [String],
             default: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']

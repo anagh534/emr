@@ -4,12 +4,14 @@ const { getUsers, toggleUserStatus, deleteUser, changePassword, updateSchedule }
 const { protect, restrictTo } = require('../middleware/authMiddleware');
 const { validateChangePassword, validateToggleStatus, validateSchedule } = require('../validators/userValidator');
 
-// Lock all user management endpoints to Super Admins only
+// Lock all user endpoints to authenticated users
 router.use(protect);
-router.use(restrictTo('Super Admin'));
 
 router.route('/')
-    .get(getUsers);
+    .get(restrictTo('Super Admin', 'Receptionist'), getUsers);
+
+// Restrict administrative modifications to Super Admins only
+router.use(restrictTo('Super Admin'));
 
 router.route('/:id/status')
     .patch(validateToggleStatus, toggleUserStatus);
